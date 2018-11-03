@@ -171,7 +171,7 @@ def adjust_cuetimes(cuetime, adjustment, adj_time, early_or_late):
 class mainWindow():
     def __init__(self, master):
         self.master = master
-        self.master.title('text2cue')
+        self.master.title('quickCUE')
 
         # Use self. to avoid garbage collection and screwing default radio button selections
         self.var = StringVar()
