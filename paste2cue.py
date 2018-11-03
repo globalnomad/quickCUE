@@ -51,6 +51,90 @@ def clean_verification(tracklist, min_adj, sec_adj, early_or_late):
     return cuetimes, tracks
 
 
+class verification_window():
+    def on_configure(self, event):
+        self.canvas.configure(scrollregion=self.canvas.bbox('all'))
+
+    def __init__(self, master, tracklist):
+        self.master = master
+        master.title('Verify information...')
+
+        self.top_frame = Frame(self.master)
+        self.top_frame.pack(fill=X)
+        self.instructions = Message(self.top_frame, text='Verify the information below and correct as necessary.', width=500)
+        self.instructions.pack(anchor=CENTER, pady=5)
+
+        self.bot_frame = Frame(self.master)
+        self.bot_frame.pack(side=BOTTOM, fill=X)
+
+        self.mid_frame = Frame(self.master)
+        self.mid_frame.pack(expand=True, fill=Y)
+
+        self.canvas = Canvas(self.mid_frame, width=627, height=500)
+        self.canvas.pack(side=LEFT, expand=True, fill=Y)
+
+        self.vsb = Scrollbar(self.mid_frame, command=self.canvas.yview)
+        self.vsb.pack(side=RIGHT, fill=Y)
+
+        self.canvas.configure(yscrollcommand=self.vsb.set)
+
+        self.canvas.bind('<Configure>', self.on_configure)
+
+        self.frame = Frame(self.canvas)
+        self.canvas.create_window((0, 0), window=self.frame, anchor=NW)
+
+        track_widgets = []
+        for i in range(len(tracklist)):
+            widgets = {}
+
+            widgets['label'] = Label(self.frame, text='Track {})'.format(tracklist[i]['track'].get()), width=7)
+            widgets['label'].grid(row=i, column=0, padx=(5, 0), sticky=E)
+
+            widgets['cuetime'] = Entry(self.frame, width=10, textvariable=tracklist[i]['cuetime'])
+            widgets['cuetime'].grid(row=i, column=1, padx=3)
+
+            widgets['artist'] = Entry(self.frame, width=30, textvariable=tracklist[i]['artist'])
+            widgets['artist'].grid(row=i, column=2, padx=3)
+
+            widgets['title'] = Entry(self.frame, width=50, textvariable=tracklist[i]['title'])
+            widgets['title'].grid(row=i, column=3, padx=(3, 7))
+
+        track_widgets.append(widgets)
+
+        self.bot_container = Frame(self.bot_frame)
+        self.bot_container.pack(anchor=CENTER)
+
+        self.adj_instructions = Label(self.bot_container, text='Adjust all cue times by')
+        self.adj_instructions.grid(row=0, column=0, sticky=E)
+
+        self.min_var = StringVar()
+        self.min_var.trace('w', lambda *args: min_limit_check(self.min_var))
+        self.sec_var = StringVar()
+        self.sec_var.trace('w', lambda *args: sec_limit_check(self.sec_var))
+
+        self.min_adj = Entry(self.bot_container, width=5, textvariable=self.min_var)
+        self.min_var.set('00')
+        self.min_adj_lbl = Label(self.bot_container, text='m')
+        self.sec_adj = Entry(self.bot_container, width=5, textvariable=self.sec_var)
+        self.sec_var.set('00')
+        self.sec_adj_lbl = Label(self.bot_container, text='s')
+        self.min_adj.grid(row=0, column=1)
+        self.min_adj_lbl.grid(row=0, column=2)
+        self.sec_adj.grid(row=0, column=3)
+        self.sec_adj_lbl.grid(row=0, column=4)
+
+        self.early_or_late = StringVar()
+        self.earlier = Radiobutton(self.bot_container, variable=self.early_or_late, value='-', text='earlier')
+        self.later = Radiobutton(self.bot_container, variable=self.early_or_late, value='+', text='later')
+        self.earlier.grid(row=0, column=5)
+        self.later.grid(row=0, column=6)
+
+        self.early_or_late.set('-')
+
+        self.confirm_button = Button(self.bot_container, text='Confirm', command=self.master.destroy)
+        self.confirm_button.grid(row=1, column=0, pady=5, columnspan=7)
+
+
 def verify_information(TLmaster, in_cuetimes, in_tracks):
     master = TLmaster
     master.title('Verify Information...')
@@ -66,71 +150,10 @@ def verify_information(TLmaster, in_cuetimes, in_tracks):
         track['title'].set(tracks[i][1])
         tracklist.append(track)
 
-    instructions = Message(master, text='Verify the information below and correct as necessary.', width=500)
-    instructions.grid(row=0, column=0, pady=5)
-
-    # Create frame to contain canvas for scrolling (feature TBA)
-    frame = Frame(master, height=500)
-    frame.grid(row=1, column=0)
-
-    # Create canvas to contain tracklist w/ scrollbar for addition later
-    canvas = Canvas(frame, height=500, highlightthickness=0)
-    canvas.pack(expand=True, fill=BOTH)
-
-    # Create track list display
-    track_widgets = []
-    for i in range(len(tracklist)):
-        widgets = {}
-
-        widgets['label'] = Label(canvas, text='Track {})'.format(tracklist[i]['track'].get()), width=7)
-        widgets['label'].grid(row=i, column=0, padx=(5, 0), pady=3, sticky=E)
-
-        widgets['cuetime'] = Entry(canvas, width=10, textvariable=tracklist[i]['cuetime'])
-        widgets['cuetime'].grid(row=i, column=1, padx=3, pady=3)
-
-        widgets['artist'] = Entry(canvas, width=30, textvariable=tracklist[i]['artist'])
-        widgets['artist'].grid(row=i, column=2, padx=3, pady=3)
-
-        widgets['title'] = Entry(canvas, width=50, textvariable=tracklist[i]['title'])
-        widgets['title'].grid(row=i, column=3, padx=(3, 7), pady=3)
-
-        track_widgets.append(widgets)
-
-    bot_frame = Frame(master)
-    bot_frame.grid(row=2, column=0)
-
-    adj_instructions = Label(bot_frame, text='Adjust all cue times by')
-    adj_instructions.grid(row=0, column=0, sticky=E)
-
-    min_var = StringVar()
-    min_var.trace('w', lambda *args: min_limit_check(min_var))
-    sec_var = StringVar()
-    sec_var.trace('w', lambda *args: sec_limit_check(sec_var))
-
-    min_adj = Entry(bot_frame, width=5, textvariable=min_var)
-    min_var.set('00')
-    min_adj_lbl = Label(bot_frame, text='m')
-    sec_adj = Entry(bot_frame, width=5, textvariable=sec_var)
-    sec_var.set('00')
-    sec_adj_lbl = Label(bot_frame, text='s')
-    min_adj.grid(row=0, column=1)
-    min_adj_lbl.grid(row=0, column=2)
-    sec_adj.grid(row=0, column=3)
-    sec_adj_lbl.grid(row=0, column=4)
-
-    early_or_late = StringVar()
-    earlier = Radiobutton(bot_frame, variable=early_or_late, value='-', text='earlier')
-    later = Radiobutton(bot_frame, variable=early_or_late, value='+', text='later')
-    earlier.grid(row=0, column=5)
-    later.grid(row=0, column=6)
-
-    early_or_late.set('-')
-
-    confirm_button = Button(bot_frame, text='Confirm', command=master.destroy)
-    confirm_button.grid(row=1, column=0, pady=5, columnspan=7)
+    gui2 = verification_window(master, tracklist)
 
     master.wait_window()
-    return (tracklist, min_var, sec_var, early_or_late)
+    return (tracklist, gui2.min_var, gui2.sec_var, gui2.early_or_late)
 
 
 def adjust_cuetimes(cuetime, adjustment, adj_time, early_or_late):
@@ -203,13 +226,13 @@ class mainWindow():
         self.var.set('online')
 
     def acquireAudioFile(self):
-        self.filepath = filedialog.askopenfilename(filetypes=[('Audio files', ('*.mp3', '*.flac', '*.wav'))])
-        if self.filepath:
+        self.filepath.set(filedialog.askopenfilename(filetypes=[('Audio files', ('*.mp3', '*.flac', '*.wav'))]))
+        if self.filepath.get():
             try:
-                file = EasyID3(self.filepath)
+                file = EasyID3(self.filepath.get())
             except:
                 try:
-                    file = File(self.filepath)
+                    file = File(self.filepath.get())
                 except:
                     messagebox.showwarning('Bad file', 'Please select an MP3, FLAC, or WAV file.')
         try:
@@ -236,7 +259,7 @@ class mainWindow():
         website = self.website.get()
         offline_tl = self.offline_tl.get()
         if self.filepath.get():
-            filename = self.filepath.split('/')[-1]
+            filename = self.filepath.get().split('/')[-1]
         else:
             filename = '[PLEASE MANUALLY INSERT FILENAME]'
         filetypes = {'wav': 'WAVE', 'lac': 'WAVE', 'mp3': 'MP3', 'ME]': '[INSERT FILE TYPE]'}
