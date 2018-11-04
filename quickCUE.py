@@ -3,8 +3,11 @@ from tkinter import filedialog
 from tkinter import messagebox
 from urllib.request import urlopen
 from bs4 import BeautifulSoup
-from mutagen import File
+from mutagen import File, MutagenError
 from mutagen.easyid3 import EasyID3
+import logging
+
+logging.basicConfig(handlers=[logging.FileHandler('log.txt', 'w', 'utf-8')], level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
 
 
 def cleaned_cuetimes(cuetimes):
@@ -51,13 +54,62 @@ def clean_verification(tracklist, min_adj, sec_adj, early_or_late):
     return cuetimes, tracks
 
 
+def verify_information(TLmaster, in_cuetimes, in_tracks):
+    master = TLmaster
+    master.title('Verify Information...')
+    cuetimes = in_cuetimes
+    tracks = in_tracks
+
+    if len(cuetimes) < len(tracks):
+        messagebox.showinfo('','It seems that not all tracks have cuetimes on 1001tracklists. Remaining tracks without cuetimes will need to be manually added to the generated CUE.')
+        last = cuetimes[-1]
+        for i in range(len(tracks) - len(cuetimes)):
+            cuetimes.append(last)
+
+    tracklist = []
+    for i in range(len(cuetimes)):
+        track = {'track': StringVar(), 'cuetime': StringVar(), 'artist': StringVar(), 'title': StringVar()}
+        track['track'].set(str(i + 1).zfill(2))
+        track['cuetime'].set(cuetimes[i])
+        track['artist'].set(tracks[i][0])
+        track['title'].set(tracks[i][1])
+        tracklist.append(track)
+
+    gui2 = verification_window(master, tracklist)
+
+    master.wait_window()
+    return (tracklist, gui2.min_var, gui2.sec_var, gui2.early_or_late)
+
+
+def adjust_cuetimes(cuetime, adjustment, adj_time, early_or_late):
+    cuetime = cuetime.split(':')
+    cuetime_secs = int(cuetime[0]) * 60 + int(cuetime[1])
+    if early_or_late.get() == '-':
+        cuetime_secs -= adj_time
+        if cuetime_secs < 0:
+            cuetime_secs = 0
+    else:
+        cuetime_secs += adj_time
+    return ':'.join([str(cuetime_secs // 60).zfill(2), str(cuetime_secs % 60).zfill(2), '00'])
+
+
 class verification_window():
     def on_configure(self, event):
         self.canvas.configure(scrollregion=self.canvas.bbox('all'))
 
+    def _bind_to_mousewheel(self, event):
+        self.canvas.bind_all('<MouseWheel>', self._on_mousehweel)
+
+    def _unbind_to_mousewheel(self, event):
+        self.canvas.unbind_all('<MouseWheel>')
+
+    def _on_mousehweel(self, event):
+        self.canvas.yview_scroll(int(-1 * (event.delta / 120)), 'units')
+
     def __init__(self, master, tracklist):
         self.master = master
         master.title('Verify information...')
+        master.attributes('-topmost','true')
 
         self.top_frame = Frame(self.master)
         self.top_frame.pack(fill=X)
@@ -77,11 +129,13 @@ class verification_window():
         self.vsb.pack(side=RIGHT, fill=Y)
 
         self.canvas.configure(yscrollcommand=self.vsb.set)
-
         self.canvas.bind('<Configure>', self.on_configure)
 
         self.frame = Frame(self.canvas)
         self.canvas.create_window((0, 0), window=self.frame, anchor=NW)
+
+        self.frame.bind('<Enter>', self._bind_to_mousewheel)
+        self.frame.bind('<Leave>', self._unbind_to_mousewheel)
 
         track_widgets = []
         for i in range(len(tracklist)):
@@ -133,39 +187,6 @@ class verification_window():
 
         self.confirm_button = Button(self.bot_container, text='Confirm', command=self.master.destroy)
         self.confirm_button.grid(row=1, column=0, pady=5, columnspan=7)
-
-
-def verify_information(TLmaster, in_cuetimes, in_tracks):
-    master = TLmaster
-    master.title('Verify Information...')
-    cuetimes = in_cuetimes
-    tracks = in_tracks
-
-    tracklist = []
-    for i in range(len(cuetimes)):
-        track = {'track': StringVar(), 'cuetime': StringVar(), 'artist': StringVar(), 'title': StringVar()}
-        track['track'].set(str(i + 1).zfill(2))
-        track['cuetime'].set(cuetimes[i])
-        track['artist'].set(tracks[i][0])
-        track['title'].set(tracks[i][1])
-        tracklist.append(track)
-
-    gui2 = verification_window(master, tracklist)
-
-    master.wait_window()
-    return (tracklist, gui2.min_var, gui2.sec_var, gui2.early_or_late)
-
-
-def adjust_cuetimes(cuetime, adjustment, adj_time, early_or_late):
-    cuetime = cuetime.split(':')
-    cuetime_secs = int(cuetime[0]) * 60 + int(cuetime[1])
-    if early_or_late.get() == '-':
-        cuetime_secs -= adj_time
-        if cuetime_secs < 0:
-            cuetime_secs = 0
-    else:
-        cuetime_secs += adj_time
-    return ':'.join([str(cuetime_secs // 60).zfill(2), str(cuetime_secs % 60).zfill(2), '00'])
 
 
 class mainWindow():
@@ -230,18 +251,18 @@ class mainWindow():
         if self.filepath.get():
             try:
                 file = EasyID3(self.filepath.get())
-            except:
+            except MutagenError:
                 try:
                     file = File(self.filepath.get())
-                except:
+                except MutagenError:
                     messagebox.showwarning('Bad file', 'Please select an MP3, FLAC, or WAV file.')
-        try:
-            self.artistvar.set(file.get('artist')[0])
-            self.titlevar.set(file.get('title')[0])
-            self.yearvar.set(file.get('date'))
-            self.genrevar.set(file.get('genre'))
-        except:
-            pass
+            if file:
+                self.artistvar.set(file.get('artist')[0])
+                self.titlevar.set(file.get('title')[0])
+                self.yearvar.set(file.get('date'))
+                self.genrevar.set(file.get('genre'))
+            #except:
+            #pass
 
     def RadioClicked(self, var):
         if var == 'online':
@@ -268,7 +289,9 @@ class mainWindow():
             site = BeautifulSoup(urlopen(website), 'lxml')
             cuetimes = [div.text.strip() for div in site.find_all('div', class_='cueValueField')]
             cuetimes = cleaned_cuetimes(cuetimes)
+            logging.debug(cuetimes)
             tracks = [span.text.strip().split(' - ') for span in site.find_all('span', class_='trackFormat') if 'tlp_' in span.parent.parent.parent.parent.parent.parent.parent['id'] and 'tlpSubTog' not in span.parent.parent.parent.parent.parent.parent.parent['class']]
+            logging.debug(tracks)
         elif offline_tl and not website:
             pass
         else:
@@ -286,7 +309,8 @@ class mainWindow():
                 file.write('REM GENRE {}\n'.format(genre))
                 file.write('REM DATE {}\n'.format(year))
                 if website:
-                    file.write('REM WWW {}\n'.format(website))
+                    short_url = site.find('td', text='short url').next_sibling.next_sibling.contents[0]['href']
+                    file.write('REM WWW {}\n'.format(short_url))
                 file.write('PERFORMER "{}"\n'.format(artist))
                 file.write('TITLE "{}"\n'.format(title))
                 file.write('FILE "{0}" {1}\n'.format(filename, filetypes[filename[-3:]]))
