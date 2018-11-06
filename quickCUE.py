@@ -5,6 +5,7 @@ from urllib.request import urlopen
 from bs4 import BeautifulSoup
 from mutagen import File, MutagenError
 from mutagen.easyid3 import EasyID3
+from re import findall, MULTILINE
 import logging
 
 
@@ -312,7 +313,7 @@ class mainWindow():
         self.log_label.set('Logging off')
         self.log_var = BooleanVar()
         self.log_var.set(False)
-        self.log_switch = Checkbutton(self.bot_but_containter, textvariable=self.log_label, variable=self.log_var, command=self.loggingChecked)
+        self.log_switch = Checkbutton(self.bot_but_containter, textvariable=self.log_label, variable=self.log_var, command=self.loggingChecked, width=8)
         self.log_switch.pack(side=LEFT)
 
         self.verifyButton = Button(self.bot_but_containter, text='Verify CUE...', command=lambda *args: self.convert2cue('verify'), default=ACTIVE)
@@ -369,7 +370,7 @@ class mainWindow():
             self.log_label.set('Logging off')
             logging.basicConfig(level=logging.CRITICAL)
 
-    def save_cue(self, site, website, tracks, cuetimes):
+    def save_cue(self, tracks, cuetimes, website=None, site=None):
         logging.info('Beginning CUE creation...')
         artist = self.artist.get() if self.artist.get() else '[ARTIST]'
         title = self.title.get() if self.title.get() else '[TITLE]'
@@ -445,18 +446,32 @@ class mainWindow():
                     logging.debug("".join(log_message))
         elif self.method.get() == 'offline':
             offline_tl = self.offline_tl.get('1.0', 'end-1c')
-            messagebox.showinfo('Whoops!', 'Still working on custom tracklists!\nPlease provide a 1001TL link instead - thanks!')
-            self.method.set('online')
-            self.RadioClicked('online')
+            '''Info for the following regex:
+               Group 1: \[?(\d?:?\d+:\d+)\]? --> optional brackets to handle non-bracketed times --> cuetime
+               Group 2:  (.*) - --> all text after the above and before ' - '--> artist
+               Group 3: ([^\[\]\n]+).*$ --> all characters but []\n followed by any character and end line --> title
+                        title has trailing space'''
+            match = findall(r'\[?(\d?:?\d+:\d+)\]? (.*) - ([^\[\]\n]+).*$', offline_tl, MULTILINE)
+            cuetimes = []
+            tracks = []
+            for item in match:
+                cuetimes.append(item[0])
+                tracks.append([item[1], item[2].strip()])
+            cuetimes = cleaned_cuetimes(cuetimes)
+            website = None
+            offline_prep_success = True
         else:
             pass
 
-        if open_success:
+        if (open_success and self.method.get() == 'online') or (offline_prep_success and self.method.get()=='offline'):
             if type == 'verify':
                 verified, tracklist, min_var, sec_var, early_or_late = verify_information(root, cuetimes, tracks)
                 cuetimes, tracklist = clean_verification(tracklist, min_var, sec_var, early_or_late)
             if verified:
-                success, error = self.save_cue(site, website, tracks, cuetimes)
+                if website:
+                    success, error = self.save_cue(tracks, cuetimes, website, site)
+                else:
+                    success, error = self.save_cue(tracks, cuetimes)
                 if success:
                     messagebox.showinfo('', 'Conversion to cue complete!')
                     logging.info('Conversion to cue complete!\n')
