@@ -413,6 +413,9 @@ class mainWindow():
         else:
             return False, False
 
+    def super_parent(self, span):
+        return span.parent.parent.parent.parent.parent.parent.parent
+
     def convert2cue(self, type):
         self.quickButton.config(state=DISABLED)
         self.verifyButton.config(state=DISABLED)
@@ -440,7 +443,14 @@ class mainWindow():
             if open_success:
                 cuetimes = [div.text.strip() for div in site.find_all('div', class_='cueValueField')]
                 cuetimes = cleaned_cuetimes(cuetimes)
-                tracks = [span.text.strip().replace(u'\xa0',u' ').split(' - ') for span in site.find_all('span', class_='trackFormat') if 'tlp_' in span.parent.parent.parent.parent.parent.parent.parent['id'] and 'tlpSubTog' not in span.parent.parent.parent.parent.parent.parent.parent['class']]
+                tracks=[]
+                for span in site.find_all('span', class_='trackFormat'):
+                    parent = self.super_parent(span)
+                    if 'tlp_' in parent['id'] and 'tlpSubTog' not in parent['class']:
+                        track = span.text.strip().replace(u'\xa0',u' ').split(' - ')
+                        tracks.append(track)
+                        # artist, title = span.text.strip().replace(u'\xa0',u' ').split(' - ')
+                        # tracks.append({'artist':artist, 'title':title})
                 if logging.getLogger().getEffectiveLevel() < 50:
                     log_message = [f'Original tracks ({len(tracks)}):\n'] + [f'{" "*34}{track[0]} - {track[1]}\n' for track in tracks]
                     logging.debug("".join(log_message))
@@ -451,12 +461,11 @@ class mainWindow():
                Group 2:  (.*) - --> all text after the above and before ' - '--> artist
                Group 3: ([^\[\]\n]+).*$ --> all characters but []\n followed by any character and end line --> title
                         title has trailing space'''
-            match = findall(r'\[?(\d?:?\d+:\d+)\]? (.*) - ([^\[\]\n]+).*$', offline_tl, MULTILINE)
+            match = findall(r'\[?(\d?:?\d+:\d+)?\]? (.*) - ([^\[\]\n]+).*$', offline_tl, MULTILINE)
             cuetimes = []
             tracks = []
             for item in match:
-                cuetimes.append(item[0])
-                tracks.append([item[1], item[2].strip()])
+                    tracks.append({'cue':item[0], 'artist':item[1], 'title':item[2].strip()})
             cuetimes = cleaned_cuetimes(cuetimes)
             website = None
             offline_prep_success = True
