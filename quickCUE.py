@@ -5,7 +5,7 @@ from urllib.request import urlopen
 from bs4 import BeautifulSoup
 from mutagen import File, MutagenError
 from mutagen.easyid3 import EasyID3
-from re import findall, MULTILINE
+import re
 import logging
 
 
@@ -14,34 +14,34 @@ class SiteValidationError(Exception):
     pass
 
 
-def cleaned_cuetimes(cuetimes):
-    logging.info('Cleaning cuetimes...')
-    logging.debug(f'Original cuetimes ({len(cuetimes)})')
-    clean_cuetimes = []
-    for i in range(len(cuetimes)):
-        if i == 0 and not cuetimes[i]:
-            clean_time = '00:00:00'
-        elif not cuetimes[i]:
-            continue
-        elif cuetimes[i].count(':') == 1:
-            min_sec = cuetimes[i].split(':')
-            clean_time = '{0}:{1}:00'.format(min_sec[0].zfill(2), min_sec[1])
-        else:
-            hr_min_sec = cuetimes[i].split(':')
-            clean_time = '{0}:{1}:00'.format(int(hr_min_sec[0]) * 60 + int(hr_min_sec[1]), hr_min_sec[2])
-        clean_cuetimes.append(clean_time)
-    logging.debug(f'Cleaned cuetimes ({len(clean_cuetimes)})')
-    if logging.getLogger().getEffectiveLevel() < 50:
-        diff = 0
-        logmessage = ['Original    Cleaned\n']
-        for i, time in enumerate(cuetimes):
-            if i == 0 or (i > 0 and time):
-                logmessage.append(f'{" "*34}{time.rjust(7)}    {clean_cuetimes[i-diff].rjust(9)}\n')
-            else:
-                logmessage.append(f'{" "*34}{time.rjust(7)}    {"Cleaned".rjust(9)}\n')
-                diff += 1
-        logging.debug("".join(logmessage))
-    return clean_cuetimes
+def get_audacity_labels(label_file_path):
+    with open(label_file_path, 'r') as audacity_labels:
+        cuetimes = []
+        for line in audacity_labels:
+            time = float(line.split()[0])
+            m = str(int(time // 60)).zfill(2)
+            s = str(int(time) % 60).zfill(2)
+            f = str(int((time - int(time))*75)).zfill(2)
+            cuetimes.append(f'{m}:{s}:{f}')
+    logging.info('Acquired cuetimes from Audacity label file!')
+    logging.debug(cuetimes)
+    return cuetimes
+
+
+def clean_cuetime(track, cuetime=None):
+    if cuetime:
+        track['cuetime'] = cuetime
+    else:
+        if track['track'] == '01' and not track['cuetime']:
+            track['cuetime'] = '00:00:00'
+        elif track['cuetime'].count(':') == 1:
+            min_sec = track['cuetime'].split(':')
+            track['cuetime'] = '{0}:{1}:00'.format(min_sec[0].zfill(2), min_sec[1])
+        elif track['cuetime']:
+            hms = track['cuetime'].split(':')
+            m, s = int(hms[0]) * 60 + int(hms[1]), hms[2]
+            track['cuetime'] = f'{m}:{s}:00'
+    return track['cuetime']
 
 
 def min_limit_check(svar):
@@ -56,47 +56,36 @@ def sec_limit_check(svar):
         svar.set(sec[:2])
 
 
-def clean_verification(tracklist, min_adj, sec_adj, early_or_late):
+def return_tracks(tracklist):
     tracks = []
-    cuetimes = []
-    for i in range(len(tracklist)):
-        tracks.append([tracklist[i]['artist'].get(), tracklist[i]['title'].get()])
-        cuetimes.append(tracklist[i]['cuetime'].get())
+    for track in tracklist:
+        tracks.append({'track': track['track'].get(), 'cuetime': track['cuetime'].get(), 'artist': track['artist'].get(), 'title': track['title'].get()})
     if logging.getLogger().getEffectiveLevel() < 50:
-        log_message = [f'Verified cuetimes and tracks ({len(cuetimes)}):\n'] + [f'{" "*34}{time.rjust(9)}  {tracks[i][0]} - {tracks[i][1]}\n' for i, time in enumerate(cuetimes)]
+        log_message = [f'Verified cuetimes and tracks ({len(tracks)}):\n'] + [f'{" "*34}{track["cuetime"].rjust(9)}  {track["artist"]} - {track["title"]}\n' for track in tracks]
         logging.debug("".join(log_message))
-    return cuetimes, tracks
+    return tracks
 
 
-def verify_information(TLroot, in_cuetimes, in_tracks):
+def verify_information(TLroot, in_tracks):
     logging.info('Opening verification window...')
     master = Toplevel(TLroot)
     master.title('Verify Information...')
-    cuetimes = in_cuetimes
-    tracks = in_tracks
 
-    if len(cuetimes) < len(tracks):
-        messagebox.showinfo('', 'It seems that not all tracks have cuetimes on 1001tracklists. Remaining tracks without cuetimes will need to be manually added to the generated CUE.')
-        logging.warning(f'Fewer cuetimes ({len(cuetimes)}) than tracks ({len(tracks)})')
-        last = cuetimes[-1]
-        for i in range(len(tracks) - len(cuetimes)):
-            cuetimes.append(last)
-
-    tracklist = []
-    for i in range(len(cuetimes)):
+    tracks = []
+    for in_track in in_tracks:
         track = {'track': StringVar(), 'cuetime': StringVar(), 'artist': StringVar(), 'title': StringVar()}
-        track['track'].set(str(i + 1).zfill(2))
-        track['cuetime'].set(cuetimes[i])
-        track['artist'].set(tracks[i][0])
-        track['title'].set(tracks[i][1])
-        tracklist.append(track)
+        track['track'].set(in_track['track'])
+        track['cuetime'].set(in_track['cuetime'])
+        track['artist'].set(in_track['artist'])
+        track['title'].set(in_track['title'])
+        tracks.append(track)
 
-    gui2 = verification_window(master, tracklist)
+    gui2 = verification_window(master, tracks)
     master.lift()
     master.focus_force()
 
     master.wait_window()
-    return (gui2.verified, tracklist, gui2.min_var, gui2.sec_var, gui2.early_or_late)
+    return (gui2.verified, tracks)
 
 
 class verification_window():
@@ -144,6 +133,7 @@ class verification_window():
         logging.info('Verification complete!')
         self.master.destroy()
 
+
     def __init__(self, master, tracklist):
         self.master = master
         self.tracklist = tracklist
@@ -162,7 +152,7 @@ class verification_window():
         self.mid_frame = Frame(self.master, borderwidth=0)
         self.mid_frame.pack(expand=True, fill=Y)
 
-        self.canvas = Canvas(self.mid_frame, width=615, height=500, highlightthickness=0)
+        self.canvas = Canvas(self.mid_frame, width=627, height=500, highlightthickness=0)
         self.canvas.pack(side=LEFT, expand=True, fill=Y)
 
         self.vsb = Scrollbar(self.mid_frame, command=self.canvas.yview)
@@ -178,20 +168,20 @@ class verification_window():
         self.frame.bind('<Leave>', self._unbind_to_mousewheel)
 
         self.track_widgets = []
-        for i in range(len(self.tracklist)):
+        for i, track in enumerate(self.tracklist):
             widget = {}
 
-            widget['label'] = Label(self.frame, text='Track {})'.format(self.tracklist[i]['track'].get()), width=7)
-            widget['label'].grid(row=i, column=0, padx=(5, 0), sticky=E)
+            widget['label'] = Label(self.frame, text=f'Track {track["track"].get()})', width=7)
+            widget['label'].grid(row=i, column=1, sticky=E)
 
-            widget['cuetime'] = Entry(self.frame, width=10, textvariable=self.tracklist[i]['cuetime'])
-            widget['cuetime'].grid(row=i, column=1, padx=1)
+            widget['cuetime'] = Entry(self.frame, width=10, textvariable=track['cuetime'])
+            widget['cuetime'].grid(row=i, column=2, padx=1)
 
-            widget['artist'] = Entry(self.frame, width=30, textvariable=self.tracklist[i]['artist'])
-            widget['artist'].grid(row=i, column=2, padx=1)
+            widget['artist'] = Entry(self.frame, width=30, textvariable=track['artist'])
+            widget['artist'].grid(row=i, column=3, padx=1)
 
-            widget['title'] = Entry(self.frame, width=50, textvariable=self.tracklist[i]['title'])
-            widget['title'].grid(row=i, column=3, padx=(1, 7))
+            widget['title'] = Entry(self.frame, width=50, textvariable=track['title'])
+            widget['title'].grid(row=i, column=4, padx=(1, 7))
 
         self.track_widgets.append(widget)
 
@@ -254,20 +244,25 @@ class mainWindow():
         self.instructions.grid(row=0, column=1, columnspan=2, sticky=W, padx=(5, 0))
 
         self.getFileButton = Button(text='Select target MP3, FLAC, or WAV...', wraplength=130, width=15, borderwidth=2, command=self.acquireAudioFile)
-        self.getFileButton.grid(row=0, column=3, sticky=E, padx=(5,10), pady=(2, 10))
+        self.getFileButton.grid(row=0, column=3, sticky=E, padx=(5, 10), pady=(5, 10))
+
+        self.file_name_var = StringVar()
+        self.file_name_var.set('[No file selected]')
+        self.file_name = Label(master, textvariable=self.file_name_var, font=('Segoe UI', 8, 'italic'), width=60)
+        self.file_name.grid(row=1, column=1, columnspan=3)
 
         self.artist = Entry(master, width=60, text=self.artistvar)
         self.artistLabel = Label(master, text='Artist:')
-        self.artistLabel.grid(row=1, column=0, sticky=W)
-        self.artist.grid(row=1, column=1, columnspan=3, pady=3, padx=10, sticky=W)
+        self.artistLabel.grid(row=2, column=0, sticky=W)
+        self.artist.grid(row=2, column=1, columnspan=3, pady=3, padx=10, sticky=W)
 
         self.title = Entry(master, width=60, text=self.titlevar)
         self.titleLabel = Label(master, text='Title:')
-        self.titleLabel.grid(row=2, column=0, sticky=W)
-        self.title.grid(row=2, column=1, columnspan=3, pady=3, padx=10, sticky=W)
+        self.titleLabel.grid(row=3, column=0, sticky=W)
+        self.title.grid(row=3, column=1, columnspan=3, pady=3, padx=10, sticky=W)
 
         self.yg_frame = Frame(master)
-        self.yg_frame.grid(row=3, column=0, columnspan=4, sticky=W)
+        self.yg_frame.grid(row=4, column=0, columnspan=4, sticky=W)
 
         self.year = Entry(self.yg_frame, width=5, text=self.yearvar)
         self.yearLabel = Label(self.yg_frame, text='Year:')
@@ -279,27 +274,36 @@ class mainWindow():
         self.genreLabel.grid(row=0, column=2, sticky=E)
         self.genre.grid(row=0, column=3, pady=3, padx=10, sticky=W)
 
+        self.aud_label_var = BooleanVar()
+        self.audacity_label = Checkbutton(self.yg_frame, text='Optionally import an Audacity label file.', variable=self.aud_label_var, command=self.use_aud_labels)
+        self.import_labels = Button(self.yg_frame, text='Import Labels', state=DISABLED, command=self.acquireLabelFile)
+        self.label_file_path = StringVar()
+        self.label_file = Entry(self.yg_frame, textvariable=self.label_file_path, width=46, state=DISABLED)
+        self.audacity_label.grid(row=1, column=1, columnspan=2, pady=(15,0), sticky=W)
+        self.import_labels.grid(row=2, column=1, pady=(0, 25))
+        self.label_file.grid(row=2, column=2, columnspan=2, padx=10, pady=(0, 25))
+
         self.webRadioButton = Radiobutton(master, text='1001 Tracklists link:', variable=self.method, value='online', command=lambda: self.RadioClicked('online'))
-        self.webRadioButton.grid(row=4, column=1, columnspan=3, sticky=W, pady=(10,0))
+        self.webRadioButton.grid(row=5, column=1, columnspan=3, sticky=W)
         self.website = Entry(master, width=60)
-        self.website.grid(row=5, column=1, columnspan=3, padx=10, sticky=W)
+        self.website.grid(row=6, column=1, columnspan=3, padx=10, sticky=W)
 
         self.customRadioButton = Radiobutton(master, text='Custom tracklist:', variable=self.method, value='offline', command=lambda: self.RadioClicked('offline'))
-        self.customRadioButton.grid(row=6, column=1, columnspan=3, sticky=W, pady=(5,0))
+        self.customRadioButton.grid(row=7, column=1, columnspan=3, sticky=W, pady=(10, 0))
 
         self.formatting_container = Frame(master)
-        self.formatting_container.grid(row=7, column=1, columnspan=3, pady=3, sticky=W)
-        self.formatting_instructions = Message(self.formatting_container, text='Please input your tracklist formatting using "hms", "artist", and "title".\nFor example:       [h:mm:ss] artist - title   OR   mmm.ss artist - title', width=370)
-        self.formatting_label = Label(self.formatting_container, text='Formatting:', width=10)
-        self.tl_formatting = StringVar()
-        self.tl_formatting.set('[h:mm:ss] artist - title')
-        self.formatting_entry = Entry(self.formatting_container, width=43, state=DISABLED, textvariable=self.tl_formatting)
+        self.formatting_container.grid(row=8, column=1, columnspan=3, sticky=W)
+        self.formatting_instructions = Message(self.formatting_container, text='Please input one track per line as "cue artist - title" or "track artist - title" (no quotes). Cues can be formatted as:   [h:mm:ss] or [mmm:sss]   with or without the [ ].', width=350)
+        # self.formatting_label = Label(self.formatting_container, text='Formatting:', width=10)
+        # self.tl_formatting = StringVar()
+        # self.tl_formatting.set('[h:mm:ss] artist - title')
+        # self.formatting_entry = Entry(self.formatting_container, width=43, state=DISABLED, textvariable=self.tl_formatting)
         self.formatting_instructions.grid(row=0, column=0, columnspan=2)
-        self.formatting_label.grid(row=1, column=0, sticky=W)
-        self.formatting_entry.grid(row=1, column=1, sticky=W)
+        # self.formatting_label.grid(row=1, column=0, sticky=W)
+        # self.formatting_entry.grid(row=1, column=1, sticky=W)
 
         self.offline_tl_container = Frame(master)
-        self.offline_tl_container.grid(row=8, column=1, columnspan=3, padx=10, sticky=W)
+        self.offline_tl_container.grid(row=9, column=1, columnspan=3, padx=10, sticky=W)
         self.offline_tl = Text(self.offline_tl_container, width=57, state=DISABLED, bg=self.website.cget('disabledbackground'), font=('Segoe UI', 8, 'normal'), wrap=WORD)
         self.offline_tl_vsb = Scrollbar(self.offline_tl_container, command=self.offline_tl.yview)
         self.offline_tl_vsb.pack(side=RIGHT, fill=Y)
@@ -307,7 +311,7 @@ class mainWindow():
         self.offline_tl.pack(side=LEFT)
 
         self.bot_but_containter = Frame(master)
-        self.bot_but_containter.grid(row=9, column=0, columnspan=4, padx=10)
+        self.bot_but_containter.grid(row=10, column=0, columnspan=4, padx=10)
 
         self.log_label = StringVar()
         self.log_label.set('Logging off')
@@ -341,26 +345,44 @@ class mainWindow():
                     messagebox.showwarning('Bad file', 'Please select an MP3, FLAC, or WAV file.')
                     logging.warning(f'Failed to import file. {me}\n')
             if file:
-                logging.info(f'Imported file "{self.filepath.get().split("/")[-1]}"')
                 self.artistvar.set(file.get('artist')[0])
                 self.titlevar.set(file.get('title')[0])
                 self.yearvar.set(file.get('date'))
                 self.genrevar.set(file.get('genre'))
+                filename = self.filepath.get().split("/")[-1]
+                if len(filename) > 70:
+                    chars_to_remove = (len(filename) - 68) // 2
+                    midpoint = len(filename) // 2
+                    filename = f'{filename[:midpoint - chars_to_remove]}...{filename[midpoint + chars_to_remove:]}'
+                self.file_name_var.set(filename)
+                logging.info(f'Imported file "{self.file_name_var.get()}"')
                 if logging.getLogger().getEffectiveLevel() < 50:
                     var_dic = {'Artist': self.artistvar, 'Title': self.titlevar, 'Year': self.yearvar, 'Genre': self.genrevar}
                     log_message = ['File properties:\n'] + [f'{" "*34}{key}: {value.get()}\n' for key, value in var_dic.items()]
                     logging.debug("".join(log_message))
 
+    def acquireLabelFile(self):
+        self.label_file_path.set(filedialog.askopenfilename(filetypes=[('Text','*.txt')]))
+        logging.info(f'Opening Audacity label file from {self.label_file_path.get()}')
+
     def RadioClicked(self, var):
         if var == 'online':
             self.website.config(state=NORMAL)
             self.offline_tl.config(state=DISABLED, bg=self.website.cget('disabledbackground'))
-            self.formatting_entry.config(state=DISABLED)
+            #self.formatting_entry.config(state=DISABLED)
         elif var == 'offline':
             self.offline_tl.config(state=NORMAL, bg='white')
-            self.formatting_entry.config(state=NORMAL)
+            #self.formatting_entry.config(state=NORMAL)
             self.website.config(state=DISABLED)
         logging.info(f'Radio button clicked: {var}\n')
+
+    def use_aud_labels(self):
+        if self.aud_label_var.get():
+            self.import_labels.config(state=NORMAL)
+            self.label_file.config(state=NORMAL)
+        else:
+            self.import_labels.config(state=DISABLED)
+            self.label_file.config(state=DISABLED)
 
     def loggingChecked(self):
         if self.log_var.get():
@@ -370,7 +392,7 @@ class mainWindow():
             self.log_label.set('Logging off')
             logging.basicConfig(level=logging.CRITICAL)
 
-    def save_cue(self, tracks, cuetimes, website=None, site=None):
+    def save_cue(self, website=None, soup=None):
         logging.info('Beginning CUE creation...')
         artist = self.artist.get() if self.artist.get() else '[ARTIST]'
         title = self.title.get() if self.title.get() else '[TITLE]'
@@ -390,16 +412,16 @@ class mainWindow():
                 file.write(f'REM GENRE {genre}\n')
                 file.write(f'REM DATE {year}\n')
                 if website:
-                    short_url = site.find('td', text='short url').next_sibling.next_sibling.contents[0]['href']
+                    short_url = soup.find('td', text='short url').next_sibling.next_sibling.contents[0]['href']
                     file.write(f'REM WWW {short_url}\n')
                 file.write(f'PERFORMER "{artist}"\n')
                 file.write(f'TITLE "{title}"\n')
                 file.write(f'FILE "{filename}" {filetypes[filename[-3:]]}\n')
-                for i in range(len(cuetimes)):
-                    file.write('    TRACK {} AUDIO\n'.format(str(i + 1).zfill(2)))
-                    file.write(f'        TITLE "{tracks[i][1]}"\n')
-                    file.write(f'        PERFORMER "{tracks[i][0]}"\n')
-                    file.write(f'        INDEX 01 {cuetimes[i]}\n')
+                for track in self.tracks:
+                    file.write(f'    TRACK {track["track"]} AUDIO\n')
+                    file.write(f'        TITLE "{track["title"]}"\n')
+                    file.write(f'        PERFORMER "{track["artist"]}"\n')
+                    file.write(f'        INDEX 01 {track["cuetime"]}\n')
                 success = True
                 exception = None
                 logging.info('CUE creation successful.')
@@ -416,6 +438,50 @@ class mainWindow():
     def super_parent(self, span):
         return span.parent.parent.parent.parent.parent.parent.parent
 
+    def with_track(self, wtrack, i):
+        if self.tracks[i]['cuetime'] != 'w/':
+            self.tracks[i]['artist'] += f' vs. {wtrack["artist"]}'
+            self.tracks[i]['title'] += f' vs. {wtrack["title"]}'
+        else:
+            self.with_track(wtrack, i - 1)
+
+    def clean_tracks(self):
+        cleaned_tracks = []
+        if self.aud_label_var.get():
+            cuetimes = get_audacity_labels(self.label_file_path.get())
+            real_tracks = [track for track in self.tracks if track['track'] != 'w/']
+            if len(cuetimes) != len(real_tracks):
+                messagebox.showwarning('', f"There are {len(cuetimes)} cuetimes in the Audacity label file, but {len(real_tracks)} tracks.\n\nIf there is one fewer cuetime than tracks, it is most likely because there is no label at the start of the audio file and quickCUE will now try to compensate.\n\nIf there is a greater discrepancy, please double check your labels.")
+                if len(real_tracks) - len(cuetimes) == 1:
+                    cuetimes.insert(0, '00:00:00')
+                elif len(real_tracks) - len(cuetimes) > 1:
+                    while len(cuetimes) != len(real_tracks):
+                        cuetimes.append('')
+            logging.info('Edited cuetimes acquired from Audacity label file!')
+            logging.debug(cuetimes)
+
+        for i, track in enumerate(self.tracks):
+            if track['track'] == 'w/':
+                self.with_track(track, i - 1)
+            elif self.aud_label_var.get():
+                track['cuetime'] = clean_cuetime(track, cuetimes[int(track['track'])-1])
+            else:
+                track['cuetime'] = clean_cuetime(track)
+
+        for track in self.tracks:
+            if track['track'] != 'w/':
+                cleaned_tracks.append(track)
+        if logging.getLogger().getEffectiveLevel() < 50:
+            message = []
+            for track in self.tracks:
+                if track['track'] != 'w/':
+                    message.append(f'{" "*34}{track["cuetime"].rjust(9)}  {track["artist"]} - {track["title"]}\n')
+                else:
+                    message.append(f'{" "*34}{"Merged":^9s}  {track["artist"]} - {track["title"]}\n')
+            log_message = [f'Cleaned cuetimes and tracks ({len(cleaned_tracks)}):\n'] + message
+            logging.debug("".join(log_message))
+        return cleaned_tracks
+
     def convert2cue(self, type):
         self.quickButton.config(state=DISABLED)
         self.verifyButton.config(state=DISABLED)
@@ -428,7 +494,7 @@ class mainWindow():
                 logging.info(f'Attempting to open {website}')
                 if '1001tracklists' not in website and '1001.tl' not in website:
                     raise SiteValidationError
-                site = BeautifulSoup(urlopen(website), 'lxml')
+                soup = BeautifulSoup(urlopen(website), 'lxml')
                 open_success = True
                 logging.info('Successfully opened site.\n')
             except SiteValidationError as e:
@@ -441,46 +507,65 @@ class mainWindow():
                 logging.warning('Unable to reach site. {e}\n')
 
             if open_success:
-                cuetimes = [div.text.strip() for div in site.find_all('div', class_='cueValueField')]
-                cuetimes = cleaned_cuetimes(cuetimes)
-                tracks=[]
-                for span in site.find_all('span', class_='trackFormat'):
-                    parent = self.super_parent(span)
-                    if 'tlp_' in parent['id'] and 'tlpSubTog' not in parent['class']:
-                        track = span.text.strip().replace(u'\xa0',u' ').split(' - ')
-                        tracks.append(track)
-                        # artist, title = span.text.strip().replace(u'\xa0',u' ').split(' - ')
-                        # tracks.append({'artist':artist, 'title':title})
+                cuetimes = [div.text.strip() for div in soup.find_all('div', class_='cueValueField')]
+                track_nos = [no.text.strip() for no in soup.find_all('span', id=re.compile('_tracknumber_value'))]
+                spans = soup.find_all('span', class_='trackFormat')
+                self.tracks = []
+                skipped = 0
+                for i, span in enumerate(spans):
+                    if 'tgHid' in self.super_parent(span)['class']:
+                        skipped += 1
+                        continue
+                    artist, title = spans[i].text.strip().replace(u'\xa0', u' ').split(' - ')
+                    status = span.next_sibling.next_sibling
+                    if status and 'trackStatus' in status['class']:
+                        title += f' {status.text.strip()}'
+                    self.tracks.append({'track': track_nos[i - skipped], 'cuetime': cuetimes[i - skipped], 'artist': artist, 'title': title})
                 if logging.getLogger().getEffectiveLevel() < 50:
-                    log_message = [f'Original tracks ({len(tracks)}):\n'] + [f'{" "*34}{track[0]} - {track[1]}\n' for track in tracks]
+                    log_message = [f'Original tracks ({len(self.tracks)}):\n'] + [f'{" "*34}{track["track"]}  {track["cuetime"].rjust(7)}  {track["artist"]} - {track["title"]}\n' for track in self.tracks]
                     logging.debug("".join(log_message))
         elif self.method.get() == 'offline':
             offline_tl = self.offline_tl.get('1.0', 'end-1c')
             '''Info for the following regex:
-               Group 1: \[?(\d?:?\d+:\d+)\]? --> optional brackets to handle non-bracketed times --> cuetime
+               Group 1: \[?(w/|\d?:?\d+:\d+)?\]? --> optional brackets to handle non-bracketed times --> cuetime
                Group 2:  (.*) - --> all text after the above and before ' - '--> artist
                Group 3: ([^\[\]\n]+).*$ --> all characters but []\n followed by any character and end line --> title
                         title has trailing space'''
-            match = findall(r'\[?(\d?:?\d+:\d+)?\]? (.*) - ([^\[\]\n]+).*$', offline_tl, MULTILINE)
-            cuetimes = []
-            tracks = []
+            match = re.findall(r'\[?(w/|\d?:?\d+:\d+)?\]? (.*) - ([^\[\]\n]+).*$', offline_tl, re.MULTILINE)
+            self.tracks = []
+            track_no = 1
             for item in match:
-                    tracks.append({'cue':item[0], 'artist':item[1], 'title':item[2].strip()})
-            cuetimes = cleaned_cuetimes(cuetimes)
+                trackno = str(track_no).zfill(2)
+                track = {'track': '', 'cuetime': '', 'artist': '', 'title': ''}
+
+                if item[0] == 'w/':
+                    track['track'] = 'w/'
+                    track['cuetime'] = ''
+                else:
+                    track['track'] = trackno
+                    track['cuetime'] = item[0]
+                    track_no += 1
+
+                track['artist'] = item[1]
+                track['title'] = item[2].strip()
+                self.tracks.append(track)
+            if logging.getLogger().getEffectiveLevel() < 50:
+                log_message = [f'Original tracks ({len(self.tracks)}):\n'] + [f'{" "*34}{track["track"]}  {track["cuetime"].rjust(7)}  {track["artist"]} - {track["title"]}\n' for track in self.tracks]
+                logging.debug("".join(log_message))
             website = None
             offline_prep_success = True
-        else:
-            pass
 
-        if (open_success and self.method.get() == 'online') or (offline_prep_success and self.method.get()=='offline'):
+        self.tracks = self.clean_tracks()
+
+        if (open_success and self.method.get() == 'online') or (offline_prep_success and self.method.get() == 'offline'):
             if type == 'verify':
-                verified, tracklist, min_var, sec_var, early_or_late = verify_information(root, cuetimes, tracks)
-                cuetimes, tracklist = clean_verification(tracklist, min_var, sec_var, early_or_late)
+                verified, tracklist = verify_information(root, self.tracks)
             if verified:
+                self.tracks = return_tracks(tracklist)
                 if website:
-                    success, error = self.save_cue(tracks, cuetimes, website, site)
+                    success, error = self.save_cue(website, soup)
                 else:
-                    success, error = self.save_cue(tracks, cuetimes)
+                    success, error = self.save_cue()
                 if success:
                     messagebox.showinfo('', 'Conversion to cue complete!')
                     logging.info('Conversion to cue complete!\n')
