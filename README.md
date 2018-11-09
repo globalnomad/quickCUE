@@ -2,6 +2,18 @@
 
 quickCUE creates compliant CUE files directly from [1001tracklists](https://www.1001tracklists.com) pages or user inputted track lists.
 
+Features include:
+
+* Reading tags from a local MP3, FLAC, or WAV file to set PERFORMER, TITLE, DATE, and GENRE headers in the CUE file
+* Import tracklist and cues from 1001tracklists.com
+* Import tracklist and cues from user input tracklists
+* Import cues from Audacity label files
+* Automatically merge tracks played 'with' other tracks as: Artist1 vs. Artist2 - Title1 vs. Title2
+* Verify and edit imported information
+  * Edit artist names and track titles
+  * Adjust all cues earlier or later in a batch action
+* Or skip verification and create your CUE in one-click!
+
 ## Getting Started
 
 1. Run quickCUE.exe in the folder you extracted from the zip.
