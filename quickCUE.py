@@ -66,7 +66,7 @@ def return_tracks(tracklist):
     return tracks
 
 
-def verify_information(TLroot, in_tracks, bg_dark, bg_light):
+def verify_information(TLroot, in_tracks):
     logging.info('Opening verification window...')
     master = Toplevel(TLroot)
     master.iconbitmap('quickCUE.ico')
@@ -81,7 +81,7 @@ def verify_information(TLroot, in_tracks, bg_dark, bg_light):
         track['title'].set(in_track['title'])
         tracks.append(track)
 
-    gui2 = verification_window(master, tracks, bg_dark, bg_light)
+    gui2 = verification_window(master, tracks)
     master.lift()
     master.focus_force()
 
@@ -90,103 +90,6 @@ def verify_information(TLroot, in_tracks, bg_dark, bg_light):
 
 
 class verification_window():
-    def __init__(self, master, tracklist, bg_dark, bg_light):
-        self.master = master
-        self.tracklist = tracklist
-
-        # To handle x-ing or canceling verification
-        self.verified = False
-
-        # Colors
-        self.bg_dark = bg_dark
-        self.bg_light = bg_light
-
-        self.verify_top_frame = Frame(self.master, borderwidth=0, bg=self.bg_dark)
-        self.verify_mid_frame = Frame(self.master, borderwidth=0, bg=self.bg_light)
-        self.verify_bot_frame = Frame(self.master, borderwidth=0, bg=self.bg_light)
-        self.verify_top_frame.pack(fill=X)
-        self.verify_bot_frame.pack(side=BOTTOM, fill=X)
-        self.verify_mid_frame.pack(expand=True, fill=Y)
-
-        # Pack into verify_top_frame
-        self.instructions = Label(self.verify_top_frame, text='Verify and edit...', bg=self.bg_dark, font=('Segoe UI', 12, 'bold'))
-        self.instructions.pack(side=LEFT, padx=5)
-
-        # Pack into verify_mid_frame
-        self.canvas = Canvas(self.verify_mid_frame, width=615, height=500, highlightthickness=0, bg=self.bg_light)
-        self.vsb = Scrollbar(self.verify_mid_frame, command=self.canvas.yview)
-        self.canvas.pack(side=LEFT, expand=True, fill=Y, pady=10)
-        self.vsb.pack(side=RIGHT, fill=Y)
-
-        self.canvas.configure(yscrollcommand=self.vsb.set)
-        self.canvas.bind('<Configure>', self.on_configure)
-
-        # Pack into canvas (which is in verify_mid_frame)
-        self.frame = Frame(self.canvas, bg=self.bg_light)
-        self.canvas.create_window((0, 0), window=self.frame, anchor=NW)
-
-        self.frame.bind('<Enter>', self._bind_to_mousewheel)
-        self.frame.bind('<Leave>', self._unbind_to_mousewheel)
-
-        # Pack into frame (which is in canvas (which is in verify_mid_frame))
-        self.track_widgets = []
-        for i, track in enumerate(self.tracklist):
-            widget = {}
-
-            widget['label'] = Label(self.frame, text=f'Track {track["track"].get()})', width=7, bg=self.bg_light)
-            widget['label'].grid(row=i, column=1, sticky=E)
-
-            widget['cuetime'] = Entry(self.frame, width=10, textvariable=track['cuetime'])
-            widget['cuetime'].grid(row=i, column=2, padx=1)
-
-            widget['artist'] = Entry(self.frame, width=30, textvariable=track['artist'])
-            widget['artist'].grid(row=i, column=3, padx=1)
-
-            widget['title'] = Entry(self.frame, width=50, textvariable=track['title'])
-            widget['title'].grid(row=i, column=4, padx=(1, 7))
-
-        self.track_widgets.append(widget)
-
-        # Pack into verify_bot_frame
-        self.bot_container = Frame(self.verify_bot_frame, bg=self.bg_light)
-        self.bot_container.pack(anchor=CENTER)
-
-        # Pack into bot_container (which is in verify_bot_frame)
-        self.min_var = StringVar()
-        self.sec_var = StringVar()
-        self.early_or_late = StringVar()
-        self.min_var.trace('w', lambda *args: self.adj_limit_check(self.min_var))
-        self.sec_var.trace('w', lambda *args: self.adj_limit_check(self.sec_var))
-
-        self.adj_instructions = Label(self.bot_container, text='Adjust all cue times by', bg=self.bg_light)
-        self.min_adj = Entry(self.bot_container, width=5, textvariable=self.min_var)
-        self.min_adj_lbl = Label(self.bot_container, text='m', bg=self.bg_light)
-        self.sec_adj = Entry(self.bot_container, width=5, textvariable=self.sec_var)
-        self.sec_adj_lbl = Label(self.bot_container, text='s', bg=self.bg_light)
-        self.earlier = Radiobutton(self.bot_container, variable=self.early_or_late, value='-', text='earlier', bg=self.bg_light)
-        self.later = Radiobutton(self.bot_container, variable=self.early_or_late, value='+', text='later', bg=self.bg_light)
-        self.adjust_button = Button(self.bot_container, text='Adjust', font=('Segoe UI', 8, 'normal'), borderwidth=1, command=self.adjust_cuetimes, bg=self.bg_dark, fg=self.bg_light)
-        self.cancel_button = Button(self.bot_container, text='Cancel', command=self.master.destroy, bg=self.bg_dark, fg=self.bg_light)
-        self.confirm_button = Button(self.bot_container, text='Confirm', command=self.complete_verification, font=('Segoe UI', 9, 'bold'), default=ACTIVE, bg=self.bg_dark, fg=self.bg_light)
-
-        self.adj_instructions.grid(row=0, column=0, sticky=E)
-        self.min_adj.grid(row=0, column=1)
-        self.min_adj_lbl.grid(row=0, column=2)
-        self.sec_adj.grid(row=0, column=3)
-        self.sec_adj_lbl.grid(row=0, column=4)
-        self.earlier.grid(row=0, column=5)
-        self.later.grid(row=0, column=6)
-        self.adjust_button.grid(row=0, column=7)
-        self.cancel_button.grid(row=1, column=0, pady=5, columnspan=4)
-        self.confirm_button.grid(row=1, column=4, pady=5, columnspan=4)
-
-        self.min_var.set('0')
-        self.sec_var.set('0')
-        self.early_or_late.set('-')
-
-        self.min_adj.bind('<FocusOut>', lambda *args: self.zero_fill(self.min_var))
-        self.sec_adj.bind('<FocusOut>', lambda *args: self.zero_fill(self.sec_var))
-
     def on_configure(self, event):
         self.canvas.configure(scrollregion=self.canvas.bbox('all'))
 
@@ -204,16 +107,15 @@ class verification_window():
         adjustment = int(self.min_adj.get()) * 60 + int(self.sec_adj.get())
         for track in self.tracklist:
             cuetime = track['cuetime'].get()
-            if cuetime:
-                cuetime = cuetime.split(':')
-                cuetime_secs = int(cuetime[0]) * 60 + int(cuetime[1])
-                if self.early_or_late.get() == '-':
-                    cuetime_secs -= adjustment
-                    if cuetime_secs < 0:
-                        cuetime_secs = 0
-                else:
-                    cuetime_secs += adjustment
-                track['cuetime'].set(':'.join([str(cuetime_secs // 60).zfill(2), str(cuetime_secs % 60).zfill(2), '00']))
+            cuetime = cuetime.split(':')
+            cuetime_secs = int(cuetime[0]) * 60 + int(cuetime[1])
+            if self.early_or_late.get() == '-':
+                cuetime_secs -= adjustment
+                if cuetime_secs < 0:
+                    cuetime_secs = 0
+            else:
+                cuetime_secs += adjustment
+            track['cuetime'].set(':'.join([str(cuetime_secs // 60).zfill(2), str(cuetime_secs % 60).zfill(2), '00']))
         logging.info(f'Cuetimes adjusted by {self.early_or_late.get()}{adjustment}s.')
 
     def adj_limit_check(self, svar):
@@ -232,6 +134,98 @@ class verification_window():
         logging.info('Verification complete!')
         self.master.destroy()
 
+    def __init__(self, master, tracklist):
+        self.master = master
+        self.tracklist = tracklist
+
+        # To handle x-ing or canceling verification
+        self.verified = False
+
+        self.top_frame = Frame(self.master, borderwidth=0)
+        self.top_frame.pack(fill=X)
+        self.instructions = Message(self.top_frame, text='Verify the information below and correct as necessary.', width=500)
+        self.instructions.pack(anchor=CENTER, pady=5)
+
+        self.bot_frame = Frame(self.master, borderwidth=0)
+        self.bot_frame.pack(side=BOTTOM, fill=X)
+
+        self.mid_frame = Frame(self.master, borderwidth=0)
+        self.mid_frame.pack(expand=True, fill=Y)
+
+        self.canvas = Canvas(self.mid_frame, width=615, height=500, highlightthickness=0)
+        self.canvas.pack(side=LEFT, expand=True, fill=Y)
+
+        self.vsb = Scrollbar(self.mid_frame, command=self.canvas.yview)
+        self.vsb.pack(side=RIGHT, fill=Y)
+
+        self.canvas.configure(yscrollcommand=self.vsb.set)
+        self.canvas.bind('<Configure>', self.on_configure)
+
+        self.frame = Frame(self.canvas)
+        self.canvas.create_window((0, 0), window=self.frame, anchor=NW)
+
+        self.frame.bind('<Enter>', self._bind_to_mousewheel)
+        self.frame.bind('<Leave>', self._unbind_to_mousewheel)
+
+        self.track_widgets = []
+        for i, track in enumerate(self.tracklist):
+            widget = {}
+
+            widget['label'] = Label(self.frame, text=f'Track {track["track"].get()})', width=7)
+            widget['label'].grid(row=i, column=1, sticky=E)
+
+            widget['cuetime'] = Entry(self.frame, width=10, textvariable=track['cuetime'])
+            widget['cuetime'].grid(row=i, column=2, padx=1)
+
+            widget['artist'] = Entry(self.frame, width=30, textvariable=track['artist'])
+            widget['artist'].grid(row=i, column=3, padx=1)
+
+            widget['title'] = Entry(self.frame, width=50, textvariable=track['title'])
+            widget['title'].grid(row=i, column=4, padx=(1, 7))
+
+        self.track_widgets.append(widget)
+
+        self.bot_container = Frame(self.bot_frame)
+        self.bot_container.pack(anchor=CENTER)
+
+        self.adj_instructions = Label(self.bot_container, text='Adjust all cue times by')
+        self.adj_instructions.grid(row=0, column=0, sticky=E)
+
+        self.min_var = StringVar()
+        self.min_var.trace('w', lambda *args: self.adj_limit_check(self.min_var))
+        self.sec_var = StringVar()
+        self.sec_var.trace('w', lambda *args: self.adj_limit_check(self.sec_var))
+
+        self.min_adj = Entry(self.bot_container, width=5, textvariable=self.min_var)
+        self.min_var.set('0')
+        self.min_adj_lbl = Label(self.bot_container, text='m')
+        self.sec_adj = Entry(self.bot_container, width=5, textvariable=self.sec_var)
+        self.sec_var.set('0')
+        self.sec_adj_lbl = Label(self.bot_container, text='s')
+        self.min_adj.grid(row=0, column=1)
+        self.min_adj.bind('<FocusOut>', lambda *args: self.zero_fill(self.min_var))
+        self.min_adj_lbl.grid(row=0, column=2)
+        self.sec_adj.grid(row=0, column=3)
+        self.sec_adj.bind('<FocusOut>', lambda *args: self.zero_fill(self.sec_var))
+        self.sec_adj_lbl.grid(row=0, column=4)
+
+        self.early_or_late = StringVar()
+        self.earlier = Radiobutton(self.bot_container, variable=self.early_or_late, value='-', text='earlier')
+        self.later = Radiobutton(self.bot_container, variable=self.early_or_late, value='+', text='later')
+        self.earlier.grid(row=0, column=5)
+        self.later.grid(row=0, column=6)
+
+        self.early_or_late.set('-')
+
+        self.adjust_button = Button(self.bot_container, text='Adjust', font=('Segoe UI', 8, 'normal'), borderwidth=1, command=self.adjust_cuetimes)
+        self.adjust_button.grid(row=0, column=7)
+
+        self.cancel_button = Button(self.bot_container, text='Cancel', command=self.master.destroy)
+        self.cancel_button.grid(row=1, column=0, pady=5, columnspan=4)
+
+        self.confirm_button = Button(self.bot_container, text='Confirm', command=self.complete_verification, font=('Segoe UI', 9, 'bold'), default=ACTIVE)
+        self.confirm_button.grid(row=1, column=4, pady=5, columnspan=4)
+
 
 class mainWindow():
     def __init__(self, master):
@@ -248,21 +242,22 @@ class mainWindow():
         self.method.set('online')
 
         # Background colors
-        self.bg_light = 'ghost white'
-        self.bg_dark = 'light slate gray'
-        self.bg_disabled = 'ghost white'
+        bg_light = 'ghost white'
+        bg_button = 'gainsboro'
+        bg_dark = 'light slate gray'
+
 
         # Holding frames for GUI
-        self.step1_frame = Frame(master, bg=self.bg_dark)
-        self.main_top_frame = Frame(master, bg=self.bg_light)
-        self.step2_frame = Frame(master, bg=self.bg_dark)
-        self.main_tag_frame = Frame(master, bg=self.bg_light)
-        self.step3_frame = Frame(master, bg=self.bg_dark)
-        self.main_tlimport_frame = Frame(master, bg=self.bg_light)
-        self.step4_frame = Frame(master, bg=self.bg_dark)
-        self.main_options_frame = Frame(master, bg=self.bg_light)
-        self.bot_buttons_frame = Frame(master,bg=self.bg_light)
-        self.bot_text_frame = Frame(master, bg=self.bg_light)
+        self.step1_frame = Frame(master, bg=bg_dark)
+        self.main_top_frame = Frame(master, bg=bg_light)
+        self.step2_frame = Frame(master, bg=bg_dark)
+        self.main_tag_frame = Frame(master, bg=bg_light)
+        self.step3_frame = Frame(master, bg=bg_dark)
+        self.main_tlimport_frame = Frame(master, bg=bg_light)
+        self.step4_frame = Frame(master, bg=bg_dark)
+        self.main_options_frame = Frame(master, bg=bg_light)
+        self.bot_buttons_frame = Frame(master,bg=bg_light)
+        self.bot_text_frame = Frame(master, bg=bg_light)
         self.step1_frame.pack(fill=X)
         self.main_top_frame.pack(fill=X)
         self.step2_frame.pack(fill=X)
@@ -275,27 +270,27 @@ class mainWindow():
         self.bot_text_frame.pack(fill=X)
 
         # Pack into step1_frame
-        self.step1 = Label(self.step1_frame, text='Select file...', bg=self.bg_dark, font=('Segoe UI', 12, 'bold'), anchor=W)
+        self.step1 = Label(self.step1_frame, text='Select file...', bg=bg_dark, font=('Segoe UI', 12, 'bold'), anchor=W)
         self.step1.pack(side=LEFT, padx=5)
 
         # Pack into main_top_frame
-        self.instructions = Message(self.main_top_frame, text='Please select the target audio file and correct the information below as necessary. This step is optional, but tells the CUE file which audio file to use.', width=290, bg=self.bg_light)
-        self.getFileButton = Button(self.main_top_frame, text='Select target MP3, FLAC, or WAV...', wraplength=130, width=15, borderwidth=2, command=self.acquireAudioFile, fg=self.bg_light, bg=self.bg_dark)
+        self.instructions = Message(self.main_top_frame, text='Please select the target audio file and correct the information below as necessary. This step is optional, but tells the CUE file which audio file to use.', width=290, bg=bg_light)
+        self.getFileButton = Button(self.main_top_frame, text='Select target MP3, FLAC, or WAV...', wraplength=130, width=15, borderwidth=2, command=self.acquireAudioFile, bg=bg_button)
         self.instructions.pack(side=LEFT, padx=(5, 0), pady=(0, 5))
         self.getFileButton.pack(side=RIGHT, padx=(5, 10), pady=(0, 5))
 
         # Pack into step2_frame
-        self.step2 = Label(self.step2_frame, text='Verify file data...', bg=self.bg_dark, font=('Segoe UI', 12, 'bold'), anchor=W)
+        self.step2 = Label(self.step2_frame, text='Verify file data...', bg=bg_dark, font=('Segoe UI', 12, 'bold'), anchor=W)
         self.step2.pack(side=LEFT, padx=5)
 
         # Pack into main_tag_frame
         self.file_name_var = StringVar()
         self.file_name_var.set('[No file selected]')
 
-        self.file_name = Label(self.main_tag_frame, textvariable=self.file_name_var, font=('Segoe UI', 8, 'italic'), width=60, bg=self.bg_light)
-        self.artistLabel = Label(self.main_tag_frame, text='Artist:', width=4, bg=self.bg_light)
+        self.file_name = Label(self.main_tag_frame, textvariable=self.file_name_var, font=('Segoe UI', 8, 'italic'), width=60, bg=bg_light)
+        self.artistLabel = Label(self.main_tag_frame, text='Artist:', width=4, bg=bg_light)
         self.artist = Entry(self.main_tag_frame, width=60, text=self.artistvar)
-        self.titleLabel = Label(self.main_tag_frame, text='Title:', width=4, bg=self.bg_light)
+        self.titleLabel = Label(self.main_tag_frame, text='Title:', width=4, bg=bg_light)
         self.title = Entry(self.main_tag_frame, width=60, text=self.titlevar)
         self.file_name.grid(row=0, column=1, columnspan=3)
         self.artistLabel.grid(row=1, column=0, sticky=W, padx=(5, 0))
@@ -303,13 +298,13 @@ class mainWindow():
         self.titleLabel.grid(row=2, column=0, sticky=W, padx=(5, 0))
         self.title.grid(row=2, column=1, columnspan=3, pady=3, padx=10, sticky=W)
 
-        self.yg_frame = Frame(self.main_tag_frame, bg=self.bg_light)
+        self.yg_frame = Frame(self.main_tag_frame, bg=bg_light)
         self.yg_frame.grid(row=3, column=0, columnspan=4, sticky=W, pady=(0, 5))
 
         # Pack into yg_frame (which is in main_tag_frame)
-        self.yearLabel = Label(self.yg_frame, text='Year:', width=4, bg=self.bg_light)
+        self.yearLabel = Label(self.yg_frame, text='Year:', width=4, bg=bg_light)
         self.year = Entry(self.yg_frame, width=5, text=self.yearvar)
-        self.genreLabel = Label(self.yg_frame, text='Genre:', bg=self.bg_light)
+        self.genreLabel = Label(self.yg_frame, text='Genre:', bg=bg_light)
         self.genre = Entry(self.yg_frame, width=15, text=self.genrevar)
         self.yearLabel.grid(row=0, column=0, sticky=W, padx=(5, 0))
         self.year.grid(row=0, column=1, pady=3, padx=10, sticky=W)
@@ -317,19 +312,19 @@ class mainWindow():
         self.genre.grid(row=0, column=3, pady=3, padx=10, sticky=W)
 
         # Pack into step3_frame
-        self.step3 = Label(self.step3_frame, text='Select tracklist...', bg=self.bg_dark, font=('Segoe UI', 12, 'bold'), anchor=W)
+        self.step3 = Label(self.step3_frame, text='Select tracklist...', bg=bg_dark, font=('Segoe UI', 12, 'bold'), anchor=W)
         self.step3.pack(side=LEFT, padx=5)
 
         # Pack into main_tlimport_frame
-        self.spacer_radio1 = Label(self.main_tlimport_frame, text='', width=5, bg=self.bg_light)
-        self.webRadioButton = Radiobutton(self.main_tlimport_frame, text='1001 Tracklists link:', variable=self.method, value='online', command=lambda: self.RadioClicked('online'), takefocus=0, bg=self.bg_light)
-        self.spacer_radio1entry = Label(self.main_tlimport_frame, text='', width=5, bg=self.bg_light)
-        self.website = Entry(self.main_tlimport_frame, width=60, disabledbackground=self.bg_disabled)
-        self.spacer_radio2 = Label(self.main_tlimport_frame, text='', width=5, bg=self.bg_light)
-        self.customRadioButton = Radiobutton(self.main_tlimport_frame, text='Custom tracklist:', variable=self.method, value='offline', command=lambda: self.RadioClicked('offline'), takefocus=0, bg=self.bg_light)
-        self.spacer_radio2entry = Label(self.main_tlimport_frame, text='', width=5, bg=self.bg_light)
-        self.formatting_container = Frame(self.main_tlimport_frame, bg=self.bg_light)
-        self.offline_tl_container = Frame(self.main_tlimport_frame, bg=self.bg_light)
+        self.spacer_radio1 = Label(self.main_tlimport_frame, text='', width=5, bg=bg_light)
+        self.webRadioButton = Radiobutton(self.main_tlimport_frame, text='1001 Tracklists link:', variable=self.method, value='online', command=lambda: self.RadioClicked('online'), takefocus=0, bg=bg_light)
+        self.spacer_radio1entry = Label(self.main_tlimport_frame, text='', width=5, bg=bg_light)
+        self.website = Entry(self.main_tlimport_frame, width=60)
+        self.spacer_radio2 = Label(self.main_tlimport_frame, text='', width=5, bg=bg_light)
+        self.customRadioButton = Radiobutton(self.main_tlimport_frame, text='Custom tracklist:', variable=self.method, value='offline', command=lambda: self.RadioClicked('offline'), takefocus=0, bg=bg_light)
+        self.spacer_radio2entry = Label(self.main_tlimport_frame, text='', width=5, bg=bg_light)
+        self.formatting_container = Frame(self.main_tlimport_frame, bg=bg_light)
+        self.offline_tl_container = Frame(self.main_tlimport_frame, bg=bg_light)
         self.spacer_radio1.grid(row=0, column=0)
         self.webRadioButton.grid(row=0, column=1, columnspan=3, sticky=W)
         self.spacer_radio1entry.grid(row=1, column=0)
@@ -341,30 +336,30 @@ class mainWindow():
         self.offline_tl_container.grid(row=4, column=1, columnspan=3, sticky=W)
 
         # Pack into formatting_container (which is in main_tlimport_frame)
-        self.formatting_instructions = Label(self.formatting_container, text='Please input one track per line.', bg=self.bg_light)
-        self.formatting_help = Button(self.formatting_container, text='Formatting Help', fg='blue', bg=self.bg_light, font=('Segoe UI', 9, 'underline'), borderwidth=0, command=self.help_format, takefocus=0, cursor='hand2')
+        self.formatting_instructions = Label(self.formatting_container, text='Please input one track per line.', bg=bg_light)
+        self.formatting_help = Button(self.formatting_container, text='Formatting Help', fg='blue', bg=bg_light, font=('Segoe UI', 9, 'underline'), borderwidth=0, command=self.help_format, takefocus=0, cursor='hand2')
         self.formatting_instructions.grid(row=0, column=0, columnspan=2)
         self.formatting_help.grid(row=1, column=0, columnspan=2, sticky=W, pady=(0, 5))
 
         # Pack into offline_tl_container (which is in main_tlimport_frame)
-        self.offline_tl = Text(self.offline_tl_container, width=59, height=20, state=DISABLED, bg=self.bg_disabled, font=('Segoe UI', 8, 'normal'), wrap=WORD)
+        self.offline_tl = Text(self.offline_tl_container, width=59, height=20, state=DISABLED, bg=self.website.cget('disabledbackground'), font=('Segoe UI', 8, 'normal'), wrap=WORD)
         self.offline_tl_vsb = Scrollbar(self.offline_tl_container, command=self.offline_tl.yview)
         self.offline_tl_vsb.pack(side=RIGHT, fill=Y, pady=(0, 7))
         self.offline_tl.config(yscrollcommand=self.offline_tl_vsb.set)
         self.offline_tl.pack(side=LEFT, pady=(0, 7))
 
         # Pack into step4_frame
-        self.step4 = Label(self.step4_frame, text='Options...', bg=self.bg_dark, font=('Segoe UI', 12, 'bold'), anchor=W)
+        self.step4 = Label(self.step4_frame, text='Options...', bg=bg_dark, font=('Segoe UI', 12, 'bold'), anchor=W)
         self.step4.pack(side=LEFT, padx=5)
 
         # Pack into main_options_frame
         self.aud_label_var = BooleanVar()
         self.label_file_path = StringVar()
 
-        self.spacer_labels = Label(self.main_options_frame, text='', width=5, bg=self.bg_light)
-        self.audacity_label = Checkbutton(self.main_options_frame, text='Optionally import an Audacity label file.', variable=self.aud_label_var, command=self.use_aud_labels, takefocus=0, font=('Segoe UI', 10, 'italic'), bg=self.bg_light)
-        self.import_labels = Button(self.main_options_frame, text='Import Labels', state=DISABLED, command=self.acquireLabelFile, bg=self.bg_dark, fg=self.bg_light)
-        self.label_file = Entry(self.main_options_frame, textvariable=self.label_file_path, width=46, state=DISABLED, disabledbackground=self.bg_disabled)
+        self.spacer_labels = Label(self.main_options_frame, text='', width=5, bg=bg_light)
+        self.audacity_label = Checkbutton(self.main_options_frame, text='Optionally import an Audacity label file.', variable=self.aud_label_var, command=self.use_aud_labels, takefocus=0, font=('Segoe UI', 10, 'italic'), bg=bg_light)
+        self.import_labels = Button(self.main_options_frame, text='Import Labels', state=DISABLED, command=self.acquireLabelFile, bg=bg_button)
+        self.label_file = Entry(self.main_options_frame, textvariable=self.label_file_path, width=46, state=DISABLED)
         self.spacer_labels.grid(row=0, column=0)
         self.audacity_label.grid(row=0, column=1, columnspan=2, sticky=W)
         self.import_labels.grid(row=1, column=1, pady=(0, 5))
@@ -376,24 +371,26 @@ class mainWindow():
         self.log_var = BooleanVar()
         self.log_var.set(False)
 
-        self.log_switch = Checkbutton(self.bot_buttons_frame, textvariable=self.log_label, variable=self.log_var, command=self.loggingChecked, width=8, takefocus=0, bg=self.bg_light)
-        self.verifyButton = Button(self.bot_buttons_frame, text='Verify CUE...', command=lambda *args: self.convert2cue('verify'), default=ACTIVE, bg=self.bg_dark, fg=self.bg_light)
-        self.quickButton = Button(self.bot_buttons_frame, text='quickCUE', command=lambda *args: self.convert2cue('quick'), takefocus=0, bg=self.bg_dark, fg=self.bg_light)
+        self.log_switch = Checkbutton(self.bot_buttons_frame, textvariable=self.log_label, variable=self.log_var, command=self.loggingChecked, width=8, takefocus=0, bg=bg_light)
+        self.verifyButton = Button(self.bot_buttons_frame, text='Verify CUE...', command=lambda *args: self.convert2cue('verify'), default=ACTIVE, bg=bg_button)
+        self.quickButton = Button(self.bot_buttons_frame, text='quickCUE', command=lambda *args: self.convert2cue('quick'), takefocus=0, bg=bg_button)
         self.log_switch.pack(side=LEFT)
         self.verifyButton.pack(side=RIGHT, padx=10, pady=(5, 0))
         self.quickButton.pack(side=RIGHT, padx=(160, 0), pady=(5, 0))
 
         # Pack into bot_text_frame
-        self.center_text = Frame(self.bot_text_frame, bg=self.bg_light)
+        self.center_text = Frame(self.bot_text_frame, bg=bg_light)
         self.center_text.pack()
 
         # Pack into center_text (which is in bot_text_frame)
-        self.appInfo = Button(self.center_text, text='About', fg='blue', bg=self.bg_light, font=('Segoe UI', 8, 'underline'), borderwidth=0, cursor='hand2', command=self.info, takefocus=0)
-        self.version = Label(self.center_text, text='v1.0.0', bg=self.bg_light)
-        self.appHelp = Button(self.center_text, text='Help', fg='blue', bg=self.bg_light, font=('Segoe UI', 8, 'underline'), borderwidth=0, cursor='hand2', command=self.help, takefocus=0)
+        self.appInfo = Button(self.center_text, text='About', fg='blue', bg=bg_light, font=('Segoe UI', 8, 'underline'), borderwidth=0, cursor='hand2', command=self.info, takefocus=0)
+        self.version = Label(self.center_text, text='v1.0.0', bg=bg_light)
+        self.appHelp = Button(self.center_text, text='Help', fg='blue', bg=bg_light, font=('Segoe UI', 8, 'underline'), borderwidth=0, cursor='hand2', command=self.help, takefocus=0)
         self.appInfo.pack(side=RIGHT, padx=1, pady=(5, 10))
         self.version.pack(side=RIGHT, pady=(5, 10))
         self.appHelp.pack(side=RIGHT, padx=1, pady=(5, 10))
+
+        # self.method.set('online')
 
     def acquireAudioFile(self):
         self.filepath.set(filedialog.askopenfilename(filetypes=[('Audio files', ('*.mp3', '*.flac', '*.wav'))]))
@@ -432,14 +429,16 @@ class mainWindow():
     def RadioClicked(self, var):
         if var == 'online':
             self.website.config(state=NORMAL)
-            self.offline_tl.config(state=DISABLED, bg=self.bg_disabled, fg=self.bg_disabled)
+            self.offline_tl.config(state=DISABLED, bg=self.website.cget('disabledbackground'))
+            # self.formatting_entry.config(state=DISABLED)
         elif var == 'offline':
-            self.offline_tl.config(state=NORMAL, bg='white', fg='black')
+            self.offline_tl.config(state=NORMAL, bg='white')
+            # self.formatting_entry.config(state=NORMAL)
             self.website.config(state=DISABLED)
         logging.info(f'Radio button clicked: {var}\n')
 
     def help_format(self):
-        messagebox.showinfo('Help with formatting', '\n'.join(['Tracks can be formatted in any of the following ways. Note that any non-alphanumeric character is a literal. (e.g. [text] means text surrounded by [ and ].\n', 'Basic format: [cue] artist - title [other_text]\n', 'All cuetimes can be read with or without the surrounding [ ]. Cues can be formatted as:   [h:mm:ss]   or   [mmm:ss]\n', '"other_text" is discarded and is optional. It\'s there to handle some tracklists that may include release label info. It must be surrounded by [ ].\n', 'Any text prior to the artist and not a cue will be discarded (e.g., track numbers).\n', "I haven't seen any tracklists using frames (e.g. mm:ss:ff), so the algorithm doesn't parse frames on input. Cues are converted into mm:ss:ff format by quickCUE. If you'd like the option to parse cues with frames, please contact me (see Help).\n", '[other text] following the title is optional. It is included in the algorithm to identify labels placed there by default 1001TL tracklist exporting.']))
+        messagebox.showinfo('Help with formatting', '\n'.join(['Tracks can be formatted in any of the following ways. Note that any non-alphanumeric character is a literal. (e.g. [text] means text surrounded by [ and ].\n', 'Basic format: [cue] artist - title [other text]\n', 'All cuetimes can be read with or without the surrounding [ ]. Cues can be formatted as:   [h:mm:ss]   or   [mmm:ss]\n', "I haven't seen any tracklists using frames (e.g. mm:ss:ff), so the algorithm doesn't parse frames on input. Cues are converted into mm:ss:ff format by quickCUE. If you'd like the option to parse cues with frames, please contact me (see Help).\n", '[other text] following the title is optional. It is included in the algorithm to identify labels placed there by default 1001TL tracklist exporting.']))
 
     def use_aud_labels(self):
         if self.aud_label_var.get():
@@ -565,22 +564,19 @@ class mainWindow():
             try:
                 website = self.website.get()
                 logging.info(f'Attempting to open {website}')
-                full_url_check = re.search(r'1001tracklists\.com/tracklist/.{8}/', website)
-                short_url_check = re.search(r'http://1001\.tl/.{8}', website)
-                if full_url_check or short_url_check:
-                    soup = BeautifulSoup(urlopen(website), 'lxml')
-                    open_success = True
-                    logging.info('Successfully opened site.\n')
-                else:
+                if '1001tracklists' not in website and '1001.tl' not in website:
                     raise SiteValidationError
+                soup = BeautifulSoup(urlopen(website), 'lxml')
+                open_success = True
+                logging.info('Successfully opened site.\n')
             except SiteValidationError as e:
                 open_success = False
-                messagebox.showwarning('Warning!', 'Please provide a valid 1001tracklists.com or 1001.tl tracklist link.\n\n1001TL is picky with URLs, so if you are using a 1001.tl short URL, provide it in the form of:  http://www.1001.tl/12345678')
-                logging.warning(f'Website not 1001tracklists.com or 1001.tl tracklist link.\n{" "*36}Not a valid tracklist link: {website}\n')
+                messagebox.showwarning('Warning!', 'Please provide a 1001tracklists.com or 1001.tl link.')
+                logging.warning('Website not 1001tracklists.com or 1001.tl link. {e}\n')
             except Exception as e:
                 open_success = False
                 messagebox.showerror('Error!', 'Could not reach site. Please verify and try again.')
-                logging.warning(f'Unable to reach site.\n{" "*36}{e}\n')
+                logging.warning('Unable to reach site. {e}\n')
 
             if open_success:
                 cuetimes = [div.text.strip() for div in soup.find_all('div', class_='cueValueField')]
@@ -606,7 +602,8 @@ class mainWindow():
                 '''Info for the following regex:
                 Group 1: \[?(w/|\d?:?\d+:\d+)?\]? --> optional brackets to handle non-bracketed times --> cuetime
                 Group 2:  (.*) - --> all text after the above and before ' - '--> artist
-                Group 3: ([^\[\]\n]+).*$ --> all characters but []\n followed by any character and end line --> title (title has trailing space)'''
+                Group 3: ([^\[\]\n]+).*$ --> all characters but []\n followed by any character and end line --> title
+                        title has trailing space'''
                 match = re.findall(r'\[?(w/|\d?:?\d+:\d+)?\]? (.*) - ([^\[\]\n]+).*$', offline_tl, re.MULTILINE)
                 self.tracks = []
                 track_no = 1
@@ -644,7 +641,7 @@ class mainWindow():
             self.tracks = self.clean_tracks()
             if type == 'verify':
                 quick = False
-                verified, tracklist = verify_information(root, self.tracks, self.bg_dark, self.bg_light)
+                verified, tracklist = verify_information(root, self.tracks)
             else:
                 quick = True
                 verified = False
