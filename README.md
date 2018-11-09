@@ -4,12 +4,13 @@ quickCUE creates compliant CUE files directly from [1001tracklists](https://www.
 
 ## Getting Started
 
-1. Select audio file to automatically fill Artist, Title, Year, Genre, and Filename fields used in the CUE header. *(optional)*
-2. Import a label file (a file with a list of cue times) exported from <a href="https://www.audacityteam.org/" title="Audacity" target="_blank">Audacity</a>. *(optional)*
-3. Paste either a link to a 1001tracklists page or your own tracklist following formatting rules (see [Formatting Help](#formatting-help)).
-3. Select quickCUE to immediately make the CUE without verifying imported information. Otherwise, select Verify CUE.
-4. Manually adjust individual cues and track information. You can also adjust all cues earlier or later by a fixed amount.
-5. Confirm and save.
+1. Run quickCUE.exe in the folder you extracted from the zip.
+2. Select audio file to automatically fill Artist, Title, Year, Genre, and Filename fields used in the CUE header. *(optional)*
+3. Import a label file (a file with a list of cue times) exported from <a href="https://www.audacityteam.org/" title="Audacity" target="_blank">Audacity</a>. *(optional)*
+4. Paste either a link to a 1001tracklists page or your own tracklist following formatting rules (see [Formatting Help](#formatting-help)).
+5. Select quickCUE to immediately make the CUE without verifying imported information. Otherwise, select Verify CUE.
+6. Manually adjust individual cues and track information. You can also adjust all cues earlier or later by a fixed amount.
+7. Confirm and save.
 
 ### Prerequisites
 
@@ -19,7 +20,7 @@ If you wish to import label files, you'll need to use <a href="https://www.audac
 
 ### Installing
 
-This is a single EXE file, so no installation required.
+Extract the contents of quickCUE-1.x.x.zip to a folder of your choice.
 
 ### Formatting Help
 
