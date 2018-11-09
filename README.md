@@ -28,7 +28,7 @@ Features include:
 
 No prerequisites for quickCUE itself.
 
-If you wish to import label files, you'll need to use <a href="https://www.audacityteam.org/" title="Audacity" target="_blank">Audacity</a>.
+If you wish to import label files, you'll need to use <a href="https://www.audacityteam.org/" title="Audacity" target="_blank">Audacity</a>. Please see the following links for info on how to [make](https://manual.audacityteam.org/man/creating_and_selecting_labels.html#point) and [export](https://manual.audacityteam.org/man/importing_and_exporting_labels.html) labels.
 
 ### Installing
 
