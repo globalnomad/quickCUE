@@ -61,4 +61,5 @@ This project is licensed under the [MIT License](https://opensource.org/licenses
 * Thanks to **you** for using this and hopefully finding it useful!
 * Thanks to all the Stack Overflow posts whose code was used or inspired my own code
 * Thanks to Reddit's <a href="http://www.reddit/com/r/trance/" title="r/trance" target="_blank">r/trance</a> for initial input and being an awesome community.
+* Thanks to @PurpleBooth for making this README.md template
 
