@@ -21,7 +21,7 @@ def get_audacity_labels(label_file_path):
             time = float(line.split()[0])
             m = str(int(time // 60)).zfill(2)
             s = str(int(time) % 60).zfill(2)
-            f = str(int((time - int(time))*75)).zfill(2)
+            f = str(int((time - int(time)) * 75)).zfill(2)
             cuetimes.append(f'{m}:{s}:{f}')
     logging.info('Acquired cuetimes from Audacity label file!')
     logging.debug(cuetimes)
@@ -69,6 +69,7 @@ def return_tracks(tracklist):
 def verify_information(TLroot, in_tracks):
     logging.info('Opening verification window...')
     master = Toplevel(TLroot)
+    master.iconbitmap('quickCUE.ico')
     master.title('Verify Information...')
 
     tracks = []
@@ -133,7 +134,6 @@ class verification_window():
         logging.info('Verification complete!')
         self.master.destroy()
 
-
     def __init__(self, master, tracklist):
         self.master = master
         self.tracklist = tracklist
@@ -152,7 +152,7 @@ class verification_window():
         self.mid_frame = Frame(self.master, borderwidth=0)
         self.mid_frame.pack(expand=True, fill=Y)
 
-        self.canvas = Canvas(self.mid_frame, width=627, height=500, highlightthickness=0)
+        self.canvas = Canvas(self.mid_frame, width=615, height=500, highlightthickness=0)
         self.canvas.pack(side=LEFT, expand=True, fill=Y)
 
         self.vsb = Scrollbar(self.mid_frame, command=self.canvas.yview)
@@ -239,97 +239,158 @@ class mainWindow():
         self.yearvar = StringVar()
         self.genrevar = StringVar()
         self.filepath = StringVar()
+        self.method.set('online')
 
-        self.instructions = Message(master, text='Please select the target audio file and correct the information below as necessary.', width=250)
-        self.instructions.grid(row=0, column=1, columnspan=2, sticky=W, padx=(5, 0))
+        # Background colors
+        bg_light = 'ghost white'
+        bg_button = 'gainsboro'
+        bg_dark = 'light slate gray'
 
-        self.getFileButton = Button(text='Select target MP3, FLAC, or WAV...', wraplength=130, width=15, borderwidth=2, command=self.acquireAudioFile)
-        self.getFileButton.grid(row=0, column=3, sticky=E, padx=(5, 10), pady=(5, 10))
 
+        # Holding frames for GUI
+        self.step1_frame = Frame(master, bg=bg_dark)
+        self.main_top_frame = Frame(master, bg=bg_light)
+        self.step2_frame = Frame(master, bg=bg_dark)
+        self.main_tag_frame = Frame(master, bg=bg_light)
+        self.step3_frame = Frame(master, bg=bg_dark)
+        self.main_tlimport_frame = Frame(master, bg=bg_light)
+        self.step4_frame = Frame(master, bg=bg_dark)
+        self.main_options_frame = Frame(master, bg=bg_light)
+        self.bot_buttons_frame = Frame(master,bg=bg_light)
+        self.bot_text_frame = Frame(master, bg=bg_light)
+        self.step1_frame.pack(fill=X)
+        self.main_top_frame.pack(fill=X)
+        self.step2_frame.pack(fill=X)
+        self.main_tag_frame.pack(fill=X)
+        self.step3_frame.pack(fill=X)
+        self.main_tlimport_frame.pack(fill=X)
+        self.step4_frame.pack(fill=X)
+        self.main_options_frame.pack(fill=X)
+        self.bot_buttons_frame.pack(fill=X)
+        self.bot_text_frame.pack(fill=X)
+
+        # Pack into step1_frame
+        self.step1 = Label(self.step1_frame, text='Select file...', bg=bg_dark, font=('Segoe UI', 12, 'bold'), anchor=W)
+        self.step1.pack(side=LEFT, padx=5)
+
+        # Pack into main_top_frame
+        self.instructions = Message(self.main_top_frame, text='Please select the target audio file and correct the information below as necessary. This step is optional, but tells the CUE file which audio file to use.', width=290, bg=bg_light)
+        self.getFileButton = Button(self.main_top_frame, text='Select target MP3, FLAC, or WAV...', wraplength=130, width=15, borderwidth=2, command=self.acquireAudioFile, bg=bg_button)
+        self.instructions.pack(side=LEFT, padx=(5, 0), pady=(0, 5))
+        self.getFileButton.pack(side=RIGHT, padx=(5, 10), pady=(0, 5))
+
+        # Pack into step2_frame
+        self.step2 = Label(self.step2_frame, text='Verify file data...', bg=bg_dark, font=('Segoe UI', 12, 'bold'), anchor=W)
+        self.step2.pack(side=LEFT, padx=5)
+
+        # Pack into main_tag_frame
         self.file_name_var = StringVar()
         self.file_name_var.set('[No file selected]')
-        self.file_name = Label(master, textvariable=self.file_name_var, font=('Segoe UI', 8, 'italic'), width=60)
-        self.file_name.grid(row=1, column=1, columnspan=3)
 
-        self.artist = Entry(master, width=60, text=self.artistvar)
-        self.artistLabel = Label(master, text='Artist:')
-        self.artistLabel.grid(row=2, column=0, sticky=W)
-        self.artist.grid(row=2, column=1, columnspan=3, pady=3, padx=10, sticky=W)
+        self.file_name = Label(self.main_tag_frame, textvariable=self.file_name_var, font=('Segoe UI', 8, 'italic'), width=60, bg=bg_light)
+        self.artistLabel = Label(self.main_tag_frame, text='Artist:', width=4, bg=bg_light)
+        self.artist = Entry(self.main_tag_frame, width=60, text=self.artistvar)
+        self.titleLabel = Label(self.main_tag_frame, text='Title:', width=4, bg=bg_light)
+        self.title = Entry(self.main_tag_frame, width=60, text=self.titlevar)
+        self.file_name.grid(row=0, column=1, columnspan=3)
+        self.artistLabel.grid(row=1, column=0, sticky=W, padx=(5, 0))
+        self.artist.grid(row=1, column=1, columnspan=3, pady=3, padx=10, sticky=W)
+        self.titleLabel.grid(row=2, column=0, sticky=W, padx=(5, 0))
+        self.title.grid(row=2, column=1, columnspan=3, pady=3, padx=10, sticky=W)
 
-        self.title = Entry(master, width=60, text=self.titlevar)
-        self.titleLabel = Label(master, text='Title:')
-        self.titleLabel.grid(row=3, column=0, sticky=W)
-        self.title.grid(row=3, column=1, columnspan=3, pady=3, padx=10, sticky=W)
+        self.yg_frame = Frame(self.main_tag_frame, bg=bg_light)
+        self.yg_frame.grid(row=3, column=0, columnspan=4, sticky=W, pady=(0, 5))
 
-        self.yg_frame = Frame(master)
-        self.yg_frame.grid(row=4, column=0, columnspan=4, sticky=W)
-
+        # Pack into yg_frame (which is in main_tag_frame)
+        self.yearLabel = Label(self.yg_frame, text='Year:', width=4, bg=bg_light)
         self.year = Entry(self.yg_frame, width=5, text=self.yearvar)
-        self.yearLabel = Label(self.yg_frame, text='Year:')
-        self.yearLabel.grid(row=0, column=0, sticky=W, padx=(0, 5))
-        self.year.grid(row=0, column=1, pady=3, padx=10, sticky=W)
-
+        self.genreLabel = Label(self.yg_frame, text='Genre:', bg=bg_light)
         self.genre = Entry(self.yg_frame, width=15, text=self.genrevar)
-        self.genreLabel = Label(self.yg_frame, text='Genre:')
+        self.yearLabel.grid(row=0, column=0, sticky=W, padx=(5, 0))
+        self.year.grid(row=0, column=1, pady=3, padx=10, sticky=W)
         self.genreLabel.grid(row=0, column=2, sticky=E)
         self.genre.grid(row=0, column=3, pady=3, padx=10, sticky=W)
 
-        self.aud_label_var = BooleanVar()
-        self.audacity_label = Checkbutton(self.yg_frame, text='Optionally import an Audacity label file.', variable=self.aud_label_var, command=self.use_aud_labels)
-        self.import_labels = Button(self.yg_frame, text='Import Labels', state=DISABLED, command=self.acquireLabelFile)
-        self.label_file_path = StringVar()
-        self.label_file = Entry(self.yg_frame, textvariable=self.label_file_path, width=46, state=DISABLED)
-        self.audacity_label.grid(row=1, column=1, columnspan=2, pady=(15,0), sticky=W)
-        self.import_labels.grid(row=2, column=1, pady=(0, 25))
-        self.label_file.grid(row=2, column=2, columnspan=2, padx=10, pady=(0, 25))
+        # Pack into step3_frame
+        self.step3 = Label(self.step3_frame, text='Select tracklist...', bg=bg_dark, font=('Segoe UI', 12, 'bold'), anchor=W)
+        self.step3.pack(side=LEFT, padx=5)
 
-        self.webRadioButton = Radiobutton(master, text='1001 Tracklists link:', variable=self.method, value='online', command=lambda: self.RadioClicked('online'))
-        self.webRadioButton.grid(row=5, column=1, columnspan=3, sticky=W)
-        self.website = Entry(master, width=60)
-        self.website.grid(row=6, column=1, columnspan=3, padx=10, sticky=W)
+        # Pack into main_tlimport_frame
+        self.spacer_radio1 = Label(self.main_tlimport_frame, text='', width=5, bg=bg_light)
+        self.webRadioButton = Radiobutton(self.main_tlimport_frame, text='1001 Tracklists link:', variable=self.method, value='online', command=lambda: self.RadioClicked('online'), takefocus=0, bg=bg_light)
+        self.spacer_radio1entry = Label(self.main_tlimport_frame, text='', width=5, bg=bg_light)
+        self.website = Entry(self.main_tlimport_frame, width=60)
+        self.spacer_radio2 = Label(self.main_tlimport_frame, text='', width=5, bg=bg_light)
+        self.customRadioButton = Radiobutton(self.main_tlimport_frame, text='Custom tracklist:', variable=self.method, value='offline', command=lambda: self.RadioClicked('offline'), takefocus=0, bg=bg_light)
+        self.spacer_radio2entry = Label(self.main_tlimport_frame, text='', width=5, bg=bg_light)
+        self.formatting_container = Frame(self.main_tlimport_frame, bg=bg_light)
+        self.offline_tl_container = Frame(self.main_tlimport_frame, bg=bg_light)
+        self.spacer_radio1.grid(row=0, column=0)
+        self.webRadioButton.grid(row=0, column=1, columnspan=3, sticky=W)
+        self.spacer_radio1entry.grid(row=1, column=0)
+        self.website.grid(row=1, column=1, columnspan=3, padx=10, sticky=W)
+        self.spacer_radio2.grid(row=2, column=0)
+        self.customRadioButton.grid(row=2, column=1, columnspan=3, sticky=W, pady=(10, 0))
+        self.spacer_radio2entry.grid(row=3, column=0)
+        self.formatting_container.grid(row=3, column=1, columnspan=3, sticky=W)
+        self.offline_tl_container.grid(row=4, column=1, columnspan=3, sticky=W)
 
-        self.customRadioButton = Radiobutton(master, text='Custom tracklist:', variable=self.method, value='offline', command=lambda: self.RadioClicked('offline'))
-        self.customRadioButton.grid(row=7, column=1, columnspan=3, sticky=W, pady=(10, 0))
-
-        self.formatting_container = Frame(master)
-        self.formatting_container.grid(row=8, column=1, columnspan=3, sticky=W)
-        self.formatting_instructions = Message(self.formatting_container, text='Please input one track per line as "cue artist - title" or "track artist - title" (no quotes). Cues can be formatted as:   [h:mm:ss] or [mmm:sss]   with or without the [ ].', width=350)
-        # self.formatting_label = Label(self.formatting_container, text='Formatting:', width=10)
-        # self.tl_formatting = StringVar()
-        # self.tl_formatting.set('[h:mm:ss] artist - title')
-        # self.formatting_entry = Entry(self.formatting_container, width=43, state=DISABLED, textvariable=self.tl_formatting)
+        # Pack into formatting_container (which is in main_tlimport_frame)
+        self.formatting_instructions = Label(self.formatting_container, text='Please input one track per line.', bg=bg_light)
+        self.formatting_help = Button(self.formatting_container, text='Formatting Help', fg='blue', bg=bg_light, font=('Segoe UI', 9, 'underline'), borderwidth=0, command=self.help_format, takefocus=0, cursor='hand2')
         self.formatting_instructions.grid(row=0, column=0, columnspan=2)
-        # self.formatting_label.grid(row=1, column=0, sticky=W)
-        # self.formatting_entry.grid(row=1, column=1, sticky=W)
+        self.formatting_help.grid(row=1, column=0, columnspan=2, sticky=W, pady=(0, 5))
 
-        self.offline_tl_container = Frame(master)
-        self.offline_tl_container.grid(row=9, column=1, columnspan=3, padx=10, sticky=W)
-        self.offline_tl = Text(self.offline_tl_container, width=57, state=DISABLED, bg=self.website.cget('disabledbackground'), font=('Segoe UI', 8, 'normal'), wrap=WORD)
+        # Pack into offline_tl_container (which is in main_tlimport_frame)
+        self.offline_tl = Text(self.offline_tl_container, width=59, height=20, state=DISABLED, bg=self.website.cget('disabledbackground'), font=('Segoe UI', 8, 'normal'), wrap=WORD)
         self.offline_tl_vsb = Scrollbar(self.offline_tl_container, command=self.offline_tl.yview)
-        self.offline_tl_vsb.pack(side=RIGHT, fill=Y)
+        self.offline_tl_vsb.pack(side=RIGHT, fill=Y, pady=(0, 7))
         self.offline_tl.config(yscrollcommand=self.offline_tl_vsb.set)
-        self.offline_tl.pack(side=LEFT)
+        self.offline_tl.pack(side=LEFT, pady=(0, 7))
 
-        self.bot_but_containter = Frame(master)
-        self.bot_but_containter.grid(row=10, column=0, columnspan=4, padx=10)
+        # Pack into step4_frame
+        self.step4 = Label(self.step4_frame, text='Options...', bg=bg_dark, font=('Segoe UI', 12, 'bold'), anchor=W)
+        self.step4.pack(side=LEFT, padx=5)
 
+        # Pack into main_options_frame
+        self.aud_label_var = BooleanVar()
+        self.label_file_path = StringVar()
+
+        self.spacer_labels = Label(self.main_options_frame, text='', width=5, bg=bg_light)
+        self.audacity_label = Checkbutton(self.main_options_frame, text='Optionally import an Audacity label file.', variable=self.aud_label_var, command=self.use_aud_labels, takefocus=0, font=('Segoe UI', 10, 'italic'), bg=bg_light)
+        self.import_labels = Button(self.main_options_frame, text='Import Labels', state=DISABLED, command=self.acquireLabelFile, bg=bg_button)
+        self.label_file = Entry(self.main_options_frame, textvariable=self.label_file_path, width=46, state=DISABLED)
+        self.spacer_labels.grid(row=0, column=0)
+        self.audacity_label.grid(row=0, column=1, columnspan=2, sticky=W)
+        self.import_labels.grid(row=1, column=1, pady=(0, 5))
+        self.label_file.grid(row=1, column=2, columnspan=2, padx=10, pady=(0, 5))
+
+        # Pack into bot_buttons_frame
         self.log_label = StringVar()
         self.log_label.set('Logging off')
         self.log_var = BooleanVar()
         self.log_var.set(False)
-        self.log_switch = Checkbutton(self.bot_but_containter, textvariable=self.log_label, variable=self.log_var, command=self.loggingChecked, width=8)
+
+        self.log_switch = Checkbutton(self.bot_buttons_frame, textvariable=self.log_label, variable=self.log_var, command=self.loggingChecked, width=8, takefocus=0, bg=bg_light)
+        self.verifyButton = Button(self.bot_buttons_frame, text='Verify CUE...', command=lambda *args: self.convert2cue('verify'), default=ACTIVE, bg=bg_button)
+        self.quickButton = Button(self.bot_buttons_frame, text='quickCUE', command=lambda *args: self.convert2cue('quick'), takefocus=0, bg=bg_button)
         self.log_switch.pack(side=LEFT)
+        self.verifyButton.pack(side=RIGHT, padx=10, pady=(5, 0))
+        self.quickButton.pack(side=RIGHT, padx=(160, 0), pady=(5, 0))
 
-        self.verifyButton = Button(self.bot_but_containter, text='Verify CUE...', command=lambda *args: self.convert2cue('verify'), default=ACTIVE)
-        self.verifyButton.pack(side=RIGHT, pady=10)
+        # Pack into bot_text_frame
+        self.center_text = Frame(self.bot_text_frame, bg=bg_light)
+        self.center_text.pack()
 
-        self.quickButton = Button(self.bot_but_containter, text='Quick CUE', command=lambda *args: self.convert2cue('quick'))
-        self.quickButton.pack(side=RIGHT, pady=10, padx=(160, 10))
+        # Pack into center_text (which is in bot_text_frame)
+        self.appInfo = Button(self.center_text, text='About', fg='blue', bg=bg_light, font=('Segoe UI', 8, 'underline'), borderwidth=0, cursor='hand2', command=self.info, takefocus=0)
+        self.version = Label(self.center_text, text='v1.0.0', bg=bg_light)
+        self.appHelp = Button(self.center_text, text='Help', fg='blue', bg=bg_light, font=('Segoe UI', 8, 'underline'), borderwidth=0, cursor='hand2', command=self.help, takefocus=0)
+        self.appInfo.pack(side=RIGHT, padx=1, pady=(5, 10))
+        self.version.pack(side=RIGHT, pady=(5, 10))
+        self.appHelp.pack(side=RIGHT, padx=1, pady=(5, 10))
 
-        self.method.set('online')
-
-        # Set verify as default action for <Return>
-        self.master.bind('<Return>', (lambda event, button=self.verifyButton: button.invoke()))
+        # self.method.set('online')
 
     def acquireAudioFile(self):
         self.filepath.set(filedialog.askopenfilename(filetypes=[('Audio files', ('*.mp3', '*.flac', '*.wav'))]))
@@ -362,19 +423,22 @@ class mainWindow():
                     logging.debug("".join(log_message))
 
     def acquireLabelFile(self):
-        self.label_file_path.set(filedialog.askopenfilename(filetypes=[('Text','*.txt')]))
+        self.label_file_path.set(filedialog.askopenfilename(filetypes=[('Text', '*.txt')]))
         logging.info(f'Opening Audacity label file from {self.label_file_path.get()}')
 
     def RadioClicked(self, var):
         if var == 'online':
             self.website.config(state=NORMAL)
             self.offline_tl.config(state=DISABLED, bg=self.website.cget('disabledbackground'))
-            #self.formatting_entry.config(state=DISABLED)
+            # self.formatting_entry.config(state=DISABLED)
         elif var == 'offline':
             self.offline_tl.config(state=NORMAL, bg='white')
-            #self.formatting_entry.config(state=NORMAL)
+            # self.formatting_entry.config(state=NORMAL)
             self.website.config(state=DISABLED)
         logging.info(f'Radio button clicked: {var}\n')
+
+    def help_format(self):
+        messagebox.showinfo('Help with formatting', '\n'.join(['Tracks can be formatted in any of the following ways. Note that any non-alphanumeric character is a literal. (e.g. [text] means text surrounded by [ and ].\n', 'Basic format: [cue] artist - title [other text]\n', 'All cuetimes can be read with or without the surrounding [ ]. Cues can be formatted as:   [h:mm:ss]   or   [mmm:ss]\n', "I haven't seen any tracklists using frames (e.g. mm:ss:ff), so the algorithm doesn't parse frames on input. Cues are converted into mm:ss:ff format by quickCUE. If you'd like the option to parse cues with frames, please contact me (see Help).\n", '[other text] following the title is optional. It is included in the algorithm to identify labels placed there by default 1001TL tracklist exporting.']))
 
     def use_aud_labels(self):
         if self.aud_label_var.get():
@@ -391,6 +455,12 @@ class mainWindow():
         else:
             self.log_label.set('Logging off')
             logging.basicConfig(level=logging.CRITICAL)
+
+    def help(self):
+        messagebox.showinfo('Help with quickCUE', '\n'.join(['Select an audio file that the CUE will be tied to. This will autofill the Artist, Title, Year, and Genre fields if the file is properly tagged. Otherwise, please manually fill those in.\n', 'If you want to use cues from an exported Audacity label file, please check the box then import the label file.\n', 'Paste a direct link to the set page on 1001TL or paste in a tracklist.\n', "Quick CUE will skip verification and immediately make the CUE file. Use this if you're 100% confident about your tracklist and cues. Otherwise, please use Verify CUE.\n", 'Any fields left blank on this screen (other than the 1001TL link or Custom TL text box) can be manually edited in the generated CUE file.', 'Check logging if you run into an error as the log file it creates will help me track it down. Note that logging only begins AFTER logging has been checked, so you will need to repeat the steps you took - thanks!']))
+
+    def info(self):
+        messagebox.showinfo('About quickCUE', '\n'.join(['App made by /u/aglobalnomad. Please message me on Reddit if you have any questions, issues, or suggestions.\n', 'Shout out to /r/trance!\n', 'Icon made by Kiranshastry from www.flaticon.com and is licensed by CC 3.0 BY.\n', 'Kiranshastry: https://www.flaticon.com/authors/kiranshastry', 'Flaticon: https://www.flaticon.com/', 'CC: http://creativecommons.org/licenses/by/3.0/']))
 
     def save_cue(self, website=None, soup=None):
         logging.info('Beginning CUE creation...')
@@ -464,7 +534,7 @@ class mainWindow():
             if track['track'] == 'w/':
                 self.with_track(track, i - 1)
             elif self.aud_label_var.get():
-                track['cuetime'] = clean_cuetime(track, cuetimes[int(track['track'])-1])
+                track['cuetime'] = clean_cuetime(track, cuetimes[int(track['track']) - 1])
             else:
                 track['cuetime'] = clean_cuetime(track)
 
@@ -485,6 +555,8 @@ class mainWindow():
     def convert2cue(self, type):
         self.quickButton.config(state=DISABLED)
         self.verifyButton.config(state=DISABLED)
+        type_log_msg = {'quick': 'Beginning creation with quickCUE...', 'verify': 'Beginning creation with verification...'}
+        logging.info(type_log_msg[type])
 
         open_success = False
 
@@ -526,42 +598,56 @@ class mainWindow():
                     logging.debug("".join(log_message))
         elif self.method.get() == 'offline':
             offline_tl = self.offline_tl.get('1.0', 'end-1c')
-            '''Info for the following regex:
-               Group 1: \[?(w/|\d?:?\d+:\d+)?\]? --> optional brackets to handle non-bracketed times --> cuetime
-               Group 2:  (.*) - --> all text after the above and before ' - '--> artist
-               Group 3: ([^\[\]\n]+).*$ --> all characters but []\n followed by any character and end line --> title
+            if offline_tl:
+                '''Info for the following regex:
+                Group 1: \[?(w/|\d?:?\d+:\d+)?\]? --> optional brackets to handle non-bracketed times --> cuetime
+                Group 2:  (.*) - --> all text after the above and before ' - '--> artist
+                Group 3: ([^\[\]\n]+).*$ --> all characters but []\n followed by any character and end line --> title
                         title has trailing space'''
-            match = re.findall(r'\[?(w/|\d?:?\d+:\d+)?\]? (.*) - ([^\[\]\n]+).*$', offline_tl, re.MULTILINE)
-            self.tracks = []
-            track_no = 1
-            for item in match:
-                trackno = str(track_no).zfill(2)
-                track = {'track': '', 'cuetime': '', 'artist': '', 'title': ''}
+                match = re.findall(r'\[?(w/|\d?:?\d+:\d+)?\]? (.*) - ([^\[\]\n]+).*$', offline_tl, re.MULTILINE)
+                self.tracks = []
+                track_no = 1
+                for item in match:
+                    trackno = str(track_no).zfill(2)
+                    track = {'track': '', 'cuetime': '', 'artist': '', 'title': ''}
 
-                if item[0] == 'w/':
-                    track['track'] = 'w/'
-                    track['cuetime'] = ''
+                    if item[0] == 'w/':
+                        track['track'] = 'w/'
+                        track['cuetime'] = ''
+                    else:
+                        track['track'] = trackno
+                        track['cuetime'] = item[0]
+                        track_no += 1
+
+                    track['artist'] = item[1]
+                    track['title'] = item[2].strip()
+                    self.tracks.append(track)
+                if logging.getLogger().getEffectiveLevel() < 50:
+                    log_message = [f'Original tracks ({len(self.tracks)}):\n'] + [f'{" "*34}{track["track"]}  {track["cuetime"].rjust(7)}  {track["artist"]} - {track["title"]}\n' for track in self.tracks]
+                    logging.debug("".join(log_message))
+                if self.tracks:
+                    website = None
+                    open_success = True
                 else:
-                    track['track'] = trackno
-                    track['cuetime'] = item[0]
-                    track_no += 1
+                    messagebox.showwarning('Improper formatting', 'Please see the Formatting Help and input a properly formatted tracklist.')
+                    logging.warning('Improperly formatted tracklist input into text field.')
+                    open_success = False
+            else:
+                messagebox.showwarning('No tracklist', 'Please input a tracklist into the text field.')
+                logging.warning('No tracklist input into text field.')
+                open_success = False
 
-                track['artist'] = item[1]
-                track['title'] = item[2].strip()
-                self.tracks.append(track)
-            if logging.getLogger().getEffectiveLevel() < 50:
-                log_message = [f'Original tracks ({len(self.tracks)}):\n'] + [f'{" "*34}{track["track"]}  {track["cuetime"].rjust(7)}  {track["artist"]} - {track["title"]}\n' for track in self.tracks]
-                logging.debug("".join(log_message))
-            website = None
-            offline_prep_success = True
-
-        self.tracks = self.clean_tracks()
-
-        if (open_success and self.method.get() == 'online') or (offline_prep_success and self.method.get() == 'offline'):
+        if open_success:
+            self.tracks = self.clean_tracks()
             if type == 'verify':
+                quick = False
                 verified, tracklist = verify_information(root, self.tracks)
-            if verified:
-                self.tracks = return_tracks(tracklist)
+            else:
+                quick = True
+                verified = False
+            if verified or quick:
+                if verified:
+                    self.tracks = return_tracks(tracklist)
                 if website:
                     success, error = self.save_cue(website, soup)
                 else:
@@ -581,5 +667,6 @@ class mainWindow():
 
 root = Tk()
 root.resizable(0, 0)
+root.iconbitmap('quickCUE.ico')
 gui = mainWindow(root)
 root.mainloop()
