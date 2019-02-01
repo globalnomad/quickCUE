@@ -13,6 +13,33 @@ import logging
 class SiteValidationError(Exception):
     pass
 
+class track():
+    total_tracks = 0
+    def __init__(self, artist, title, cuetime):
+        self.__artist = artist
+        self.__title = title
+        self.__cuetime = cuetime
+        self.trackNumber = track.total_tracks + 1
+        self.trackID = track.total_tracks + 1
+        track.total_tracks += 1
+    def getArtist(self):
+        return self.__artist.get()
+    def setArtist(self, artist):
+        self.__artist.set(artist)
+    def getTitle(self):
+        return self.__title.get()
+    def setTitle(self, cue):
+        self.__title.set(cue)
+    def getCue(self):
+        return self.__cuetime.get()
+    def setCue(self, cue):
+        self.__cuetime.set(cue)
+    def updateTrackNumber(self, tracklist):
+        difference = self.trackNumber - tracklist.index(self)
+        if difference != 1:
+            self.trackNumber -= difference-1
+        else:
+            pass
 
 def get_audacity_labels(label_file_path):
     with open(label_file_path, 'r') as audacity_labels:
@@ -396,7 +423,7 @@ class mainWindow():
         self.appHelp.pack(side=RIGHT, padx=1, pady=(5, 10))
 
     def acquireAudioFile(self):
-        self.filepath.set(filedialog.askopenfilename(filetypes=[('Audio files', ('*.mp3', '*.flac', '*.wav'))]))
+        self.filepath.set(filedialog.askopenfilename(filetypes=[('Audio files', ('*.mp3', '*.m4a', '*.flac', '*.wav'))]))
         logging.info(f'Attempting to open file {self.filepath.get()}' if self.filepath.get() else 'File selection cancelled.')
         if self.filepath.get():
             try:
@@ -406,13 +433,19 @@ class mainWindow():
                 try:
                     file = File(self.filepath.get())
                 except MutagenError as me:
-                    messagebox.showwarning('Bad file', 'Please select an MP3, FLAC, or WAV file.')
+                    messagebox.showwarning('Bad file', 'Please select an MP3, FLAC, M4A or WAV file.')
                     logging.warning(f'Failed to import file. {me}\n')
             if file:
-                self.artistvar.set(file.get('artist')[0])
-                self.titlevar.set(file.get('title')[0])
-                self.yearvar.set(file.get('date'))
-                self.genrevar.set(file.get('genre'))
+                if self.filepath.get()[-4:].lower() is not '.m4a':
+                    self.artistvar.set(file.get('artist')[0])
+                    self.titlevar.set(file.get('title')[0])
+                    self.yearvar.set(file.get('date'))
+                    self.genrevar.set(file.get('genre'))
+                else:
+                    self.artistvar.set(file.get('')[0])
+                    self.titlevar.set(file.get('')[0])
+                    self.yearvar.set(file.get(''))
+                    self.genrevar.set(file.get(''))
                 filename = self.filepath.get().split("/")[-1]
                 if len(filename) > 70:
                     chars_to_remove = (len(filename) - 68) // 2
