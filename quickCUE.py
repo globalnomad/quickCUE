@@ -416,7 +416,7 @@ class mainWindow():
 
         # Pack into center_text (which is in bot_text_frame)
         self.appInfo = Button(self.center_text, text='About', fg='blue', bg=self.bg_light, font=('Segoe UI', 8, 'underline'), borderwidth=0, cursor='hand2', command=self.info, takefocus=0)
-        self.version = Label(self.center_text, text='v1.0.0', bg=self.bg_light)
+        self.version = Label(self.center_text, text='v1.1.0', bg=self.bg_light)
         self.appHelp = Button(self.center_text, text='Help', fg='blue', bg=self.bg_light, font=('Segoe UI', 8, 'underline'), borderwidth=0, cursor='hand2', command=self.help, takefocus=0)
         self.appInfo.pack(side=RIGHT, padx=1, pady=(5, 10))
         self.version.pack(side=RIGHT, pady=(5, 10))
@@ -436,16 +436,16 @@ class mainWindow():
                     messagebox.showwarning('Bad file', 'Please select an MP3, FLAC, M4A or WAV file.')
                     logging.warning(f'Failed to import file. {me}\n')
             if file:
-                if self.filepath.get()[-4:].lower() is not '.m4a':
+                if self.filepath.get()[-4:].lower() !=  '.m4a':
                     self.artistvar.set(file.get('artist')[0])
                     self.titlevar.set(file.get('title')[0])
                     self.yearvar.set(file.get('date'))
                     self.genrevar.set(file.get('genre'))
                 else:
-                    self.artistvar.set(file.get('')[0])
-                    self.titlevar.set(file.get('')[0])
-                    self.yearvar.set(file.get(''))
-                    self.genrevar.set(file.get(''))
+                    self.artistvar.set(file.get('\xa9ART')[0])
+                    self.titlevar.set(file.get('\xa9nam')[0])
+                    self.yearvar.set(file.get('\xa9day'))
+                    self.genrevar.set(file.get('\xa9gen'))
                 filename = self.filepath.get().split("/")[-1]
                 if len(filename) > 70:
                     chars_to_remove = (len(filename) - 68) // 2
@@ -510,13 +510,13 @@ class mainWindow():
                 filename = self.filepath.get().split('/')[-1]
             else:
                 filename = '[PLEASE MANUALLY INSERT FILENAME]'
-            filetypes = {'wav': 'WAVE', 'lac': 'WAVE', 'mp3': 'MP3', 'ME]': '[INSERT FILE TYPE]'}
+            filetypes = {'wav': 'WAVE', 'lac': 'WAVE', 'm4a' : 'WAVE', 'mp3': 'MP3', 'ME]': '[INSERT FILE TYPE]'}
 
             try:
                 file.write(f'REM GENRE {genre}\n')
                 file.write(f'REM DATE {year}\n')
                 if website:
-                    short_url = soup.find('td', text='short url').next_sibling.next_sibling.contents[0]['href']
+                    short_url = 'https://' + soup.find('td', text='short link').next_sibling.next_sibling.text.strip()
                     file.write(f'REM WWW {short_url}\n')
                 file.write(f'PERFORMER "{artist}"\n')
                 file.write(f'TITLE "{title}"\n')
@@ -531,7 +531,7 @@ class mainWindow():
                 logging.info('CUE creation successful.')
             except Exception as e:
                 success = False
-                exception = e.args[1]
+                exception = e.args[0]
                 logging.warning(f'Error during creation of CUE. {exception}')
             finally:
                 file.close()
