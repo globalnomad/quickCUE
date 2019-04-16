@@ -416,7 +416,7 @@ class mainWindow():
 
         # Pack into center_text (which is in bot_text_frame)
         self.appInfo = Button(self.center_text, text='About', fg='blue', bg=self.bg_light, font=('Segoe UI', 8, 'underline'), borderwidth=0, cursor='hand2', command=self.info, takefocus=0)
-        self.version = Label(self.center_text, text='v1.1.0', bg=self.bg_light)
+        self.version = Label(self.center_text, text='v1.1.1', bg=self.bg_light)
         self.appHelp = Button(self.center_text, text='Help', fg='blue', bg=self.bg_light, font=('Segoe UI', 8, 'underline'), borderwidth=0, cursor='hand2', command=self.help, takefocus=0)
         self.appInfo.pack(side=RIGHT, padx=1, pady=(5, 10))
         self.version.pack(side=RIGHT, pady=(5, 10))
@@ -435,18 +435,20 @@ class mainWindow():
                 except MutagenError as me:
                     messagebox.showwarning('Bad file', 'Please select an MP3, FLAC, M4A or WAV file.')
                     logging.warning(f'Failed to import file. {me}\n')
-            if file:
-                if self.filepath.get()[-4:].lower() !=  '.m4a':
-                    self.artistvar.set(file.get('artist')[0])
-                    self.titlevar.set(file.get('title')[0])
-                    self.yearvar.set(file.get('date'))
-                    self.genrevar.set(file.get('genre'))
-                else:
-                    self.artistvar.set(file.get('\xa9ART')[0])
-                    self.titlevar.set(file.get('\xa9nam')[0])
-                    self.yearvar.set(file.get('\xa9day'))
-                    self.genrevar.set(file.get('\xa9gen'))
+            if not file is None: # Allows tagless files, but ignores when file opening is cancelled
+                tags = {'mp3etc':['artist','title','date','genre'], 'm4a':['\xa9ART','\xa9nam','\xa9day','\xa9gen']}
+                self_vars = [self.artistvar, self.titlevar, self.yearvar, self.genrevar]
+                for i in range(4):
+                    self_vars[i].set('')
+                    if self.filepath.get()[-4:].lower() != '.m4a':
+                        tag = file.get(tags['mp3etc'][i])
+                    else:
+                        tag = file.get(tags['m4a'][i])
+                    if tag:
+                        tag = tag[0]
+                        self_vars[i].set(tag)
                 filename = self.filepath.get().split("/")[-1]
+                logging.info(f'File name is: {filename}')
                 if len(filename) > 70:
                     chars_to_remove = (len(filename) - 68) // 2
                     midpoint = len(filename) // 2
@@ -501,41 +503,41 @@ class mainWindow():
         artist = self.artist.get() if self.artist.get() else '[ARTIST]'
         title = self.title.get() if self.title.get() else '[TITLE]'
 
-        file = filedialog.asksaveasfile(defaultextension='.cue', filetypes=[('CUE', '*.cue')], initialfile=f'{artist} - {title}')
-        logging.info(f'Saving to {file.name}' if file else 'CUE creation cancelled.\n')
-        if file:
-            year = self.year.get() if self.year.get() else '9999'
-            genre = self.genre.get() if self.genre.get() else '[GENRE]'
-            if self.filepath.get():
-                filename = self.filepath.get().split('/')[-1]
-            else:
-                filename = '[PLEASE MANUALLY INSERT FILENAME]'
-            filetypes = {'wav': 'WAVE', 'lac': 'WAVE', 'm4a' : 'WAVE', 'mp3': 'MP3', 'ME]': '[INSERT FILE TYPE]'}
+        cue_filename = filedialog.asksaveasfilename(defaultextension='.cue', filetypes=[('CUE', '*.cue')], initialfile=f'{artist} - {title}')
+        logging.info(f'Saving to {cue_filename}' if cue_filename else 'CUE creation cancelled.\n')
+        if cue_filename:
+            with open(cue_filename, "w", encoding="utf-8") as file:
+                year = self.year.get() if self.year.get() else '9999'
+                genre = self.genre.get() if self.genre.get() else '[GENRE]'
+                if self.filepath.get():
+                    filename = self.filepath.get().split('/')[-1]
+                else:
+                    filename = '[PLEASE MANUALLY INSERT FILENAME]'
+                filetypes = {'wav': 'WAVE', 'lac': 'WAVE', 'm4a' : 'WAVE', 'mp3': 'MP3', 'ME]': '[INSERT FILE TYPE]'}
 
-            try:
-                file.write(f'REM GENRE {genre}\n')
-                file.write(f'REM DATE {year}\n')
-                if website:
-                    short_url = 'https://' + soup.find('td', text='short link').next_sibling.next_sibling.text.strip()
-                    file.write(f'REM WWW {short_url}\n')
-                file.write(f'PERFORMER "{artist}"\n')
-                file.write(f'TITLE "{title}"\n')
-                file.write(f'FILE "{filename}" {filetypes[filename[-3:]]}\n')
-                for track in self.tracks:
-                    file.write(f'    TRACK {track["track"]} AUDIO\n')
-                    file.write(f'        TITLE "{track["title"]}"\n')
-                    file.write(f'        PERFORMER "{track["artist"]}"\n')
-                    file.write(f'        INDEX 01 {track["cuetime"]}\n')
-                success = True
-                exception = None
-                logging.info('CUE creation successful.')
-            except Exception as e:
-                success = False
-                exception = e.args[0]
-                logging.warning(f'Error during creation of CUE. {exception}')
-            finally:
-                file.close()
-                return success, exception
+                try:
+                    file.write(f'REM GENRE {genre}\n')
+                    file.write(f'REM DATE {year}\n')
+                    if website:
+                        short_url = 'https://' + soup.find('td', text='short link').next_sibling.next_sibling.text.strip()
+                        file.write(f'REM WWW {short_url}\n')
+                    file.write(f'PERFORMER "{artist}"\n')
+                    file.write(f'TITLE "{title}"\n')
+                    file.write(f'FILE "{filename}" {filetypes[filename[-3:]]}\n')
+                    for track in self.tracks:
+                        file.write(f'    TRACK {track["track"]} AUDIO\n')
+                        file.write(f'        TITLE "{track["title"]}"\n')
+                        file.write(f'        PERFORMER "{track["artist"]}"\n')
+                        file.write(f'        INDEX 01 {track["cuetime"]}\n')
+                    success = True
+                    exception = None
+                    logging.info('CUE creation successful.')
+                except Exception as e:
+                    success = False
+                    exception = e.args[0]
+                    logging.warning(f'Error during creation of CUE. {exception}')
+                finally:
+                    return success, exception
         else:
             return False, False
 
@@ -598,8 +600,8 @@ class mainWindow():
             try:
                 website = self.website.get()
                 logging.info(f'Attempting to open {website}')
-                full_url_check = re.search(r'1001tracklists\.com/tracklist/.{8}/', website)
-                short_url_check = re.search(r'http://1001\.tl/.{8}', website)
+                full_url_check = re.search(r'1001tracklists\.com/tracklist/.{7,8}/', website)
+                short_url_check = re.search(r'1001\.tl/.{7,8}', website)
                 if full_url_check or short_url_check:
                     soup = BeautifulSoup(urlopen(website), 'lxml')
                     open_success = True
