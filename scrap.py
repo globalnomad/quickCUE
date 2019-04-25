@@ -23,7 +23,7 @@ class track():
         return f'{h}:{m}:{s}'
 
     def clean_cuetime(self, cuetime):
-        if self.trackNumber == '01' and not cuetime:
+        if self.__trackNumber == '01' and not cuetime:
             return 0
         elif ':' not in cuetime:
             return 0
@@ -49,14 +49,16 @@ class track():
         else:
             pass
 
-class cuefile():
-    def __init__(self, artist, title, year, genre, filepath='', website='')
-        self.artist = artist
-        self.title = title
-        self.date = year
-        self.genre = genre
-        self.filepath = filepath
-        self.tracklist = []
-        self.website = website
-    def save(self, website=None, soup=None):
-
+    def clean_track(self, cuesheet, aud_label_var):
+        if aud_label_var:
+            cuetimes = get_audacity_labels(self.label_file_path.get())
+            real_tracks = [track for track in cuesheet.tracklist if track.__TLtrack != 'w/']
+            if len(cuetimes) != len(real_tracks):
+                messagebox.showwarning('', f"There are {len(cuetimes)} cuetimes in the Audacity label file, but {len(real_tracks)} tracks.\n\nIf there is one fewer cuetime than tracks, it is most likely because there is no label at the start of the audio file and quickCUE will now try to compensate.\n\nIf there is a greater discrepancy, please double check your labels.")
+                if len(real_tracks) - len(cuetimes) == 1:
+                    cuetimes.insert(0, '00:00:00')
+                elif len(real_tracks) - len(cuetimes) > 1:
+                    while len(cuetimes) != len(real_tracks):
+                        cuetimes.append('')
+            logging.info('Edited cuetimes acquired from Audacity label file!')
+            logging.debug(cuetimes)
