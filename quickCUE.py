@@ -3,10 +3,14 @@ from tkinter import filedialog
 from tkinter import messagebox
 from urllib.request import urlopen
 from bs4 import BeautifulSoup
+from functools import partial
 from mutagen import File, MutagenError
 from mutagen.easyid3 import EasyID3
+from PIL import Image, ImageTk
+from pygame import mixer
 import re
 import logging
+
 
 
 # Create custom exception for when text in the website box is not a valid 1001tracklists link
@@ -16,19 +20,38 @@ class SiteValidationError(Exception):
 
 class Track():
     total_tracks = 0
+    filelength = 0
 
-    def __init__(self, cuesheet):
+    def __init__(self, cuesheet, mixer):
         self._artist = StringVar()
         self._title = StringVar()
-        self._cuetime = IntVar()
+        self._cuetime = DoubleVar()
         self._trackNumber = Track.total_tracks + 1
         self._trackID = Track.total_tracks + 1
 
         # For the verification window
         self._cuetext = StringVar()
+        self._mixer = mixer
+        self._playedtime = 0
 
         Track.total_tracks += 1
         cuesheet.total_tracks += 1
+
+    def play(self, applybutton, stopbutton):
+        applybutton.config(state=DISABLED)
+        stopbutton.config(state=ACTIVE)
+        self._playedtime = 0
+        position = self._cuetime.get()
+        logging.info(f' Preparing to play Track {self._trackNumber} from {self.cue2text()}...')
+        self._mixer.music.play(start=position)
+        logging.info(' Play started.')
+
+    def stop(self, applybutton, stopbutton):
+        self._mixer.music.pause()
+        self._playedtime = self._mixer.music.get_pos()
+        applybutton.config(state=ACTIVE)
+        stopbutton.config(state=DISABLED)
+        logging.info(' Play stopped.')
 
     def updateTrackNumber(self, tracklist):
         difference = self._trackNumber - tracklist.index(self)
@@ -37,39 +60,43 @@ class Track():
         else:
             pass
 
-    def cue2text(self, save=False):
-        '''Send False (default) to output hh:mm:ss
-        Send True to output mm:ss:ff'''
-        if self._cuetime.get() == 0 and self._trackNumber == 1:
+    def cue2text(self, cue=None):
+        cue = cue if cue else self._cuetime.get()
+        if cue == 0 and self._trackNumber == 1:
             return '00:00:00'
-        elif self._cuetime.get() == 0:
+        elif cue == 0:
             return ''
         else:
-            if save:
-                m = self._cuetime.get() // 60
-                s = self._cuetime.get() - m * 60
-                return f'{str(m).zfill(2)}:{str(s).zfill(2)}:00'
-            else:
-                h = self._cuetime.get() // 3600
-                m = (self._cuetime.get() - h * 3600) // 60
-                s = self._cuetime.get() - h * 3600 - m * 60
-                return f'{str(h).zfill(2)}:{str(m).zfill(2)}:{str(s).zfill(2)}'
+            m = int(cue // 60)
+            s = int(cue - m * 60)
+            f = int(((cue - m * 60) % 1) * 75)
+            return f'{str(m).zfill(2)}:{str(s).zfill(2)}:{str(f).zfill(2)}'
 
-    def text2cue(self, cuetime):
+
+    def text2cue(self, cuetime, web_or_local='local'):
         if self._trackNumber == '01' and not cuetime:
             return 0
         elif ':' not in cuetime:
             return 0
-        else:
+        elif web_or_local == 'web':
             hms = cuetime.split(':')
             if len(hms) < 3:
                 hms.insert(0, '0')
             return int(hms[0]) * 3600 + int(hms[1]) * 60 + int(hms[2])
+        else:
+            msf = cuetime.split(':')
+            return int(msf[0]) * 60 + int(msf[1]) + (int(msf[2]) / 75)
 
-    def adjust_cuetime(self, adjustment, add_or_subtract,window):
+    def adjust_cuetime(self, type, adjustment, window, applybutton=None):
         current = self._cuetime.get()
-        if current:
-            if add_or_subtract == '-':
+        if type == 'newpos':
+            new = current + self._playedtime / 1000
+            self._cuetime.set(new)
+            self._cuetext.set(self.cue2text())
+            self._playedtime = 0
+            applybutton.config(state=DISABLED)
+        elif current:
+            if type == '-':
                 new = current - adjustment
                 if new < 0:
                     proceed = messagebox.askokcancel('Warning',
@@ -83,8 +110,14 @@ class Track():
                         new = current
             else:
                 new = current + adjustment
-            self._cuetime.set(new)
-            self._cuetext.set(self.cue2text())
+            if new < self.filelength:
+                self._cuetime.set(new)
+                self._cuetext.set(self.cue2text())
+            else:
+                messagebox.showwarning(f'Error on Track {str(self._trackNumber).zfill(2)}: Invalid cue',
+                                        f'File is shorter than the new cue ({self.cue2text(new)}) for Track {self._trackNumber}.\n'
+                                        f'Cue time will remain unchanged.\n'
+                                        f'File is {self.cue2text(self.filelength)} long.', parent=window)
         else:
             pass
 
@@ -142,7 +175,7 @@ class Cuefile():
                         file.write(f'    TRACK {str(track._trackNumber).zfill(2)} AUDIO\n')
                         file.write(f'        TITLE "{track._title.get()}"\n')
                         file.write(f'        PERFORMER "{track._artist.get()}"\n')
-                        file.write(f'        INDEX 01 {track.cue2text(True)}\n')
+                        file.write(f'        INDEX 01 {track.cue2text()}\n')
                     success = True
                     logging.info(' Cue file creation successful.')
                 except Exception as e:
@@ -167,6 +200,11 @@ class verificationWindow():
         self.bg_light = 'ghost white'
         self.bg_dark = 'light slate gray'
 
+        # Images
+        self.play_img = ImageTk.PhotoImage(Image.open("play-16.png"))
+        self.stop_img = ImageTk.PhotoImage(Image.open("stop-16.png"))
+        self.apply_img = ImageTk.PhotoImage(Image.open("checkmark-16.png"))
+
         self.verify_top_frame = Frame(self.master, borderwidth=0, bg=self.bg_dark)
         self.verify_mid_frame = Frame(self.master, borderwidth=0, bg=self.bg_light)
         self.verify_bot_frame = Frame(self.master, borderwidth=0, bg=self.bg_light)
@@ -175,13 +213,24 @@ class verificationWindow():
         self.verify_mid_frame.pack(expand=True, fill=Y)
 
         # Pack into verify_top_frame
-        self.instructions = Label(self.verify_top_frame, text='Verify and edit...', bg=self.bg_dark, font=('Segoe UI', 12, 'bold'))
-        self.instructions.pack(side=LEFT, padx=5)
+        instructions = 'Verify imported information and edit as necessary using the fields below.'
+        if mixer.get_init():
+            instructions += ' The Play button plays the file from the cue. The stop button stops playback. The check button changes the cue to the last play position.\n\nIf you have imported an audio file and a cue is beyond the file length, the text will be red and the play button will be disabled. Edit the cue to an appropriate time to enable the play button.'
+        self.instructions = Message(self.verify_top_frame, text=instructions, width=615, bg=self.bg_light)
+        self.instructions.pack(side=BOTTOM, expand=True, fill=X)
+
+        self.heading = Label(self.verify_top_frame, text='Verify and edit...', bg=self.bg_dark, font=('Segoe UI', 12, 'bold'))
+        self.heading.pack(side=LEFT, padx=5)
+
+        self.filler = Label(self.verify_top_frame, bg=self.bg_dark)
+        self.filler.pack(side=RIGHT,fill=X, expand=True)
 
         # Pack into verify_mid_frame
         self.canvas = Canvas(self.verify_mid_frame, width=615, height=500, highlightthickness=0, bg=self.bg_light)
+        if mixer.get_init():
+            self.canvas.config(width=692)
         self.vsb = Scrollbar(self.verify_mid_frame, command=self.canvas.yview)
-        self.canvas.pack(side=LEFT, expand=True, fill=Y, pady=10)
+        self.canvas.pack(side=LEFT, expand=True, fill=Y, pady=5)
         self.vsb.pack(side=RIGHT, fill=Y)
 
         self.canvas.configure(yscrollcommand=self.vsb.set)
@@ -211,7 +260,27 @@ class verificationWindow():
             widget['title'] = Entry(self.frame, width=50, textvariable=track._title)
             widget['title'].grid(row=i, column=4, padx=(1, 7))
 
-        self.track_widgets.append(widget)
+            if mixer.get_init():
+                widget['play'] = Button(self.frame, image=self.play_img, height=14, width=14)
+                widget['play'].grid(row=i, column=5, padx=1)
+
+                widget['stop'] = Button(self.frame, image=self.stop_img, height=14, width=14, state=DISABLED)
+                widget['stop'].grid(row=i, column=6, padx=1)
+
+                widget['apply'] = Button(self.frame, height=14, image=self.apply_img, state=DISABLED)
+                widget['apply'].grid(row=i, column=7, padx=(1, 7))
+
+                widget['play'].config(command=partial(track.play, widget['apply'], widget['stop']))
+                widget['stop'].config(command=partial(track.stop, widget['apply'], widget['stop']))
+                widget['apply'].config(command=partial(track.adjust_cuetime, 'newpos', 0, master, widget['apply']))
+
+                track._cuetext.trace('w', self.cuecheck)
+
+                if track._cuetime.get() > track.filelength:
+                    widget['cuetime'].config(fg='red')
+                    widget['play'].config(state=DISABLED)
+
+            self.track_widgets.append(widget)
 
         # Pack into verify_bot_frame
         self.bot_container = Frame(self.verify_bot_frame, bg=self.bg_light)
@@ -245,7 +314,7 @@ class verificationWindow():
         self.action_button_container.grid(row=1, columnspan=8)
 
         self.export_labels_button = Button(self.action_button_container, text='Export label file', command=self.export_aud_label, bg=self.bg_dark, fg=self.bg_light)
-        self.cancel_button = Button(self.action_button_container, text='Cancel', command=self.cancel_verification, bg=self.bg_dark, fg=self.bg_light)
+        self.cancel_button = Button(self.action_button_container, text='Cancel', command=self.cancel_verification, bg='#a6b1bc', fg=self.bg_light)
         self.confirm_button = Button(self.action_button_container, text='Confirm', command=self.complete_verification, font=('Segoe UI', 9, 'bold'), default=ACTIVE, bg=self.bg_dark, fg=self.bg_light)
 
         self.export_labels_button.pack(side=LEFT, fill=X, pady=5, padx=10)
@@ -279,6 +348,18 @@ class verificationWindow():
         if svar == self.sec_var and adj and int(adj) > 59 and int(adj[0]) > 5:
             svar.set('59')
 
+    def cuecheck(self, name, index, mode):
+        for i, track in enumerate(self.tracklist):
+            if name == str(track._cuetext):
+                newtime = track.text2cue(track._cuetext.get())
+                # track._cuetime.set(newtime)
+                if newtime > track.filelength:
+                    self.track_widgets[i]['play'].config(state=DISABLED)
+                    self.track_widgets[i]['cuetime'].config(fg='red')
+                else:
+                    self.track_widgets[i]['play'].config(state=ACTIVE)
+                    self.track_widgets[i]['cuetime'].config(fg='black')
+
     def zero_fill(self, svar):
         if not svar.get():
             svar.set('0')
@@ -303,7 +384,7 @@ class verificationWindow():
             self.sec_adj.set(0)
         adjustment = int(self.min_adj.get()) * 60 + int(self.sec_adj.get())
         for i in range(len(self.tracklist)):
-            self.tracklist[i].adjust_cuetime(adjustment, self.add_or_subtract.get(),self.master)
+            self.tracklist[i].adjust_cuetime(self.add_or_subtract.get(), adjustment, self.master)
         logging.info(f' Cuetimes adjusted by {self.add_or_subtract.get()}{adjustment}s.')
 
     def export_aud_label(self):
@@ -315,7 +396,8 @@ class verificationWindow():
                 file.write(f'{track._cuetime.get()}\t{track._cuetime.get()}\t{track._artist.get()} - {track._title.get()}\n')
         messagebox.showinfo('Success',
                         f'Audacity label file successfully exported.\n\n'
-                        f'Please open your audio file in Audacity and import the label file to edit the positioning of the cues.')
+                        f'Please open your audio file in Audacity and import the label file to edit the positioning of the cues.',
+                        parent=self.master)
 
 
 
@@ -477,7 +559,7 @@ class mainWindow():
 
         # Pack into center_text (which is in bot_text_frame)
         self.appInfo = Button(self.center_text, text='About', fg='blue', bg=self.bg_light, font=('Segoe UI', 8, 'underline'), borderwidth=0, cursor='hand2', command=self.info, takefocus=0)
-        self.version = Label(self.center_text, text='v1.2.0', bg=self.bg_light)
+        self.version = Label(self.center_text, text='v1.3.0', bg=self.bg_light)
         self.appHelp = Button(self.center_text, text='Help', fg='blue', bg=self.bg_light, font=('Segoe UI', 8, 'underline'), borderwidth=0, cursor='hand2', command=self.help, takefocus=0)
         self.appInfo.pack(side=RIGHT, padx=1, pady=(5, 10))
         self.version.pack(side=RIGHT, pady=(5, 10))
@@ -490,6 +572,7 @@ class mainWindow():
         if self.filepath.get():
             try:
                 file = EasyID3(self.filepath.get())
+                Track.filelength = File(self.filepath.get()).info.length
             except MutagenError as me:
                 logging.warning(f'EasyID3 failed. Trying File method. Error: {me}')
                 try:
@@ -497,31 +580,36 @@ class mainWindow():
                 except MutagenError as me:
                     messagebox.showwarning('Bad file', 'Please select an MP3, FLAC, M4A or WAV file.')
                     logging.warning(f'Failed to import file. Error: {me}\n')
-            if not file is None:  # Allows tagless files, but ignores when file opening is cancelled
-                tags = {'mp3etc': ['artist', 'title', 'date', 'genre'], 'm4a': ['\xa9ART', '\xa9nam', '\xa9day', '\xa9gen']}
-                self_vars = [self.artistvar, self.titlevar, self.yearvar, self.genrevar]
-                for i in range(4):
-                    self_vars[i].set('')
-                    if self.filepath.get()[-4:].lower() != '.m4a':
-                        tag = file.get(tags['mp3etc'][i])
-                    else:
-                        tag = file.get(tags['m4a'][i])
-                    if tag:
-                        tag = tag[0]
-                        self_vars[i].set(tag)
-                filename = self.filepath.get().split("/")[-1]
-                logging.info(f' File name is: {filename}')
-                if len(filename) > 70:
-                    chars_to_remove = (len(filename) - 68) // 2
-                    midpoint = len(filename) // 2
-                    filename = f'{filename[:midpoint - chars_to_remove]}...{filename[midpoint + chars_to_remove:]}'
-                self.file_name_var.set(filename)
-                self.clear_button.config(state=NORMAL)
-                logging.info(f' Imported file "{self.file_name_var.get()}"')
-                if logging.getLogger().getEffectiveLevel() < 50:
-                    var_dic = {'Artist': self.artistvar, 'Title': self.titlevar, 'Year': self.yearvar, 'Genre': self.genrevar}
-                    log_message = ['File properties:\n'] + [f'{" "*34}{key}: {value.get()}\n' for key, value in var_dic.items()]
-                    logging.debug("".join(log_message))
+                Track.filelength = file.info.length
+            if not self.filepath.get().endswith('.m4a'):
+                mixer.init(44100, -16, 2)
+                mixer.music.load(self.filepath.get())
+            tags = {'mp3etc': ['artist', 'title', 'date', 'genre'], 'm4a': ['\xa9ART', '\xa9nam', '\xa9day', '\xa9gen']}
+            self_vars = [self.artistvar, self.titlevar, self.yearvar, self.genrevar]
+            for i in range(4):
+                self_vars[i].set('')
+                if self.filepath.get()[-4:].lower() == '.wav':
+                    tag = ['']
+                elif self.filepath.get()[-4:].lower() == '.m4a':
+                    tag = file.get(tags['m4a'][i])
+                else:
+                    tag = file.get(tags['mp3etc'][i])
+                if tag:
+                    tag = tag[0]
+                    self_vars[i].set(tag)
+            filename = self.filepath.get().split("/")[-1]
+            logging.info(f' File name is: {filename}')
+            if len(filename) > 70:
+                chars_to_remove = (len(filename) - 68) // 2
+                midpoint = len(filename) // 2
+                filename = f'{filename[:midpoint - chars_to_remove]}...{filename[midpoint + chars_to_remove:]}'
+            self.file_name_var.set(filename)
+            self.clear_button.config(state=NORMAL)
+            logging.info(f' Imported file "{self.file_name_var.get()}"')
+            if logging.getLogger().getEffectiveLevel() < 50:
+                var_dic = {'Artist': self.artistvar, 'Title': self.titlevar, 'Year': self.yearvar, 'Genre': self.genrevar}
+                log_message = ['File properties:\n'] + [f'{" "*34}{key}: {value.get()}\n' for key, value in var_dic.items()]
+                logging.debug("".join(log_message))
 
     def acquireLabelFile(self):
         self.label_file_path.set(filedialog.askopenfilename(filetypes=[('Text', '*.txt')]))
@@ -587,7 +675,8 @@ class mainWindow():
             'App made by /u/aglobalnomad. Please message me on Reddit or create an Issue on Github if you have any questions, issues, or suggestions.\n',
             'https://github.com/globalnomad/quickCUE\n',
             'Shout out to /r/trance!\n',
-            'Icon made by Kiranshastry from www.flaticon.com and is licensed by CC 3.0 BY.\n',
+            'Play, stop, and check button icons from Icons8: https://icons8.com/\n',
+            'App icon made by Kiranshastry from www.flaticon.com and is licensed by CC 3.0 BY.\n',
             'Kiranshastry: https://www.flaticon.com/authors/kiranshastry',
             'Flaticon: https://www.flaticon.com/',
             'CC: http://creativecommons.org/licenses/by/3.0/']))
@@ -633,7 +722,7 @@ class mainWindow():
             full_url_check = re.search(r'1001tracklists\.com/tracklist/.{7,8}/', website)
             short_url_check = re.search(r'1001\.tl/.{7,8}', website)
             if full_url_check or short_url_check:
-                soup = BeautifulSoup(urlopen(website), 'lxml')
+                soup = BeautifulSoup(urlopen(website), 'html.parser')
                 logging.info(' Successfully opened site.\n')
                 return soup
             else:
@@ -724,13 +813,13 @@ class mainWindow():
                 tracklist[-1]._title.set(f'{title1} vs. {titles[i]}')
                 logging.info(f' Merged  {artists[i]} - {titles[i]} with previous track.')
             else:
-                track = Track(self.cuesheet)
+                track = Track(self.cuesheet, mixer)
                 track._artist.set(artists[i])
                 track._title.set(titles[i])
                 if using_aud_labels:
                     track._cuetime.set(aud_cuetimes[i])
                 else:
-                    track._cuetime.set(track.text2cue(cuetimes[i]))
+                    track._cuetime.set(track.text2cue(cuetimes[i], web_or_local='web'))
                 track._cuetext.set(track.cue2text())
                 tracklist.append(track)
         if logging.getLogger().getEffectiveLevel() < 50:

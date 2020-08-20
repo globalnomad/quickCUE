@@ -1,1 +1,5 @@
+pyinstaller quickCue.spec
+
+or from scratch:
+
 pyinstaller.exe --icon=quickCue.ico --noconsole quickCue.py
